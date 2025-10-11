@@ -57,6 +57,13 @@
         .btn-primary:hover {
             background: #5568d3;
         }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
         .btn-secondary {
             background: #6c757d;
             color: white;
@@ -70,38 +77,6 @@
         }
         .btn-danger:hover {
             background: #c82333;
-        }
-        .form-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }
-        .form-section h2 {
-            color: #495057;
-            margin-bottom: 15px;
-            font-size: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #495057;
-            font-weight: 500;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ced4da;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         .items-list {
             display: grid;
@@ -229,6 +204,29 @@
         .close:hover {
             color: #000;
         }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #495057;
+            font-weight: 500;
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -259,6 +257,15 @@
             font-weight: 500;
             margin-bottom: 10px;
         }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .section-header h2 {
+            color: #495057;
+        }
     </style>
 </head>
 <body>
@@ -271,8 +278,20 @@
         </div>
     </div>
 
-    <div class="form-section">
-        <h2>➕ Добавить новую запись</h2>
+    <div class="section-header">
+        <h2>📋 Список записей</h2>
+        <button class="btn btn-success" onclick="openAddModal()">➕ Добавить запись</button>
+    </div>
+    <div id="itemsList" class="items-list"></div>
+</div>
+
+<!-- Модальное окно для добавления -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>➕ Добавить новую запись</h2>
+            <span class="close" onclick="closeAddModal()">&times;</span>
+        </div>
         <form id="addForm">
             <div class="form-group">
                 <label>Источник:</label>
@@ -301,9 +320,6 @@
             <button type="submit" class="btn btn-primary">Добавить запись</button>
         </form>
     </div>
-
-    <h2 style="margin-bottom: 20px; color: #495057;">📋 Список записей</h2>
-    <div id="itemsList" class="items-list"></div>
 </div>
 
 <!-- Модальное окно для редактирования -->
@@ -389,6 +405,16 @@
 <script>
     loadItems();
 
+    function openAddModal() {
+        document.getElementById('addModal').style.display = 'block';
+    }
+
+    function closeAddModal() {
+        document.getElementById('addModal').style.display = 'none';
+        document.getElementById('addForm').reset();
+        document.querySelector('[name="active"]').checked = true;
+    }
+
     function showNginxError(message, details) {
         document.getElementById('nginxErrorMessage').textContent = message || 'Произошла ошибка при проверке конфигурации Nginx';
         document.getElementById('nginxErrorDetails').textContent = details || 'Нет дополнительной информации';
@@ -417,13 +443,12 @@
         });
 
         if (response.ok) {
-            e.target.reset();
-            document.querySelector('[name="active"]').checked = true;
-            document.querySelector('[name="ssl"]').checked = false;
+            closeAddModal();
             loadItems();
             alert('Запись успешно добавлена!');
         } else {
             const error = await response.json();
+            closeAddModal();
             if (error.details) {
                 showNginxError(error.error, error.details);
             } else {
@@ -438,7 +463,7 @@
         const itemsList = document.getElementById('itemsList');
 
         if (items.length === 0) {
-            itemsList.innerHTML = '<div class="empty-state"><h3>Нет записей</h3><p>Добавьте первую запись, используя форму выше</p></div>';
+            itemsList.innerHTML = '<div class="empty-state"><h3>Нет записей</h3><p>Добавьте первую запись, нажав на кнопку "Добавить запись"</p></div>';
             return;
         }
 
@@ -623,9 +648,13 @@
     });
 
     window.onclick = function(event) {
+        const addModal = document.getElementById('addModal');
         const editModal = document.getElementById('editModal');
         const passwordModal = document.getElementById('passwordModal');
         const nginxErrorModal = document.getElementById('nginxErrorModal');
+        if (event.target === addModal) {
+            closeAddModal();
+        }
         if (event.target === editModal) {
             closeEditModal();
         }
