@@ -10,9 +10,10 @@ services:
       # Файлы сайта
       - ./website:/var/www/html
       # Конфигурационные файлы Nginx
+      - ./configs/nginx/sites:/etc/nginx/conf.d/:ro
       - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./configs/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./configs/nginx/taskid.ru.conf:/etc/nginx/conf.d/taskid.ru.conf:ro
+#      - ./configs/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+#      - ./configs/nginx/taskid.ru.conf:/etc/nginx/conf.d/taskid.ru.conf:ro
       # Логи выводим наружу
       - ./logs/nginx:/var/log/nginx
 #    depends_on:
@@ -53,7 +54,9 @@ services:
     volumes:
       # Монтируем всю папку webadmin в /app контейнера
       - ./webadmin:/app
-      - ./data:/app/data
+      - node_modules:/app/node_modules  # анонимный volume, скрывает node_modules
+      - ./data:/data
+      - ./configs/nginx/sites:/nginx_config
     environment:
       - NODE_ENV=production
     restart: unless-stopped
@@ -70,6 +73,7 @@ networks:
   db_network:
     driver: bridge
 
-#volumes:
+volumes:
+  node_modules:
 #  mysql_data:
 #  redis_data:

@@ -9,7 +9,8 @@ const app = express();
 const PORT = 8881;
 
 // Путь к папке с данными
-const DATA_DIR = path.join(__dirname, 'data');
+// const DATA_DIR = path.join(__dirname, '/data');
+const DATA_DIR = "/data";
 
 // Пути к файлам данных
 const USER_DATA_FILE = path.join(DATA_DIR, 'user.json');
