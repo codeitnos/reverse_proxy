@@ -103,7 +103,7 @@ function createNginxConfig(domain, dest) {
         template = template.replace(/{destination}/g, dest);
 
         // Сохраняем конфиг
-        const configPath = path.join(NGINX_CONFIG_DIR, domain);
+        const configPath = path.join(NGINX_CONFIG_DIR, domain+'.conf');
         fs.writeFileSync(configPath, template, 'utf8');
         console.log(`✅ Создан nginx конфиг: ${configPath}`);
         return true;
@@ -116,7 +116,7 @@ function createNginxConfig(domain, dest) {
 // Функция для удаления nginx конфига
 function deleteNginxConfig(domain) {
     try {
-        const configPath = path.join(NGINX_CONFIG_DIR, domain);
+        const configPath = path.join(NGINX_CONFIG_DIR, domain+'.conf');
         if (fs.existsSync(configPath)) {
             fs.unlinkSync(configPath);
             console.log(`🗑️  Удален nginx конфиг: ${configPath}`);
