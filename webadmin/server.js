@@ -22,6 +22,16 @@ const ITEMS_DATA_FILE = path.join(DATA_DIR, 'items.json');
 // Пути для nginx конфигов
 const NGINX_CONFIG_DIR = '/nginx_config';
 const NGINX_TEMPLATE_PATH = '/app/nginx/template.conf';
+const NGINX_SSL_TEMPLATE_PATH = '/app/nginx/template_ssl.conf';
+
+// Функция для извлечения корневого домена из поддомена
+function getRootDomain(fullDomain) {
+    const parts = fullDomain.split('.');
+    if (parts.length >= 2) {
+        return parts.slice(-2).join('.');
+    }
+    return fullDomain;
+}
 
 // Функция для загрузки данных пользователя
 function loadUserData() {
@@ -82,7 +92,7 @@ function saveItems() {
 }
 
 // Функция для создания nginx конфига из шаблона
-function createNginxConfig(domain, dest) {
+function createNginxConfig(domain, dest, ssl = false) {
     try {
         // Проверяем существование папки nginx_config
         if (!fs.existsSync(NGINX_CONFIG_DIR)) {
@@ -90,17 +100,27 @@ function createNginxConfig(domain, dest) {
             console.log('📁 Создана папка для nginx конфигов');
         }
 
+        // Выбираем шаблон в зависимости от SSL
+        const templatePath = ssl ? NGINX_SSL_TEMPLATE_PATH : NGINX_TEMPLATE_PATH;
+
         // Читаем шаблон
-        if (!fs.existsSync(NGINX_TEMPLATE_PATH)) {
-            console.error('❌ Шаблон nginx не найден:', NGINX_TEMPLATE_PATH);
+        if (!fs.existsSync(templatePath)) {
+            console.error('❌ Шаблон nginx не найден:', templatePath);
             return false;
         }
 
-        let template = fs.readFileSync(NGINX_TEMPLATE_PATH, 'utf8');
+        let template = fs.readFileSync(templatePath, 'utf8');
 
         // Заменяем параметры
-        template = template.replace(/{domain}/g, domain);
+        template = template.replace(/{host}/g, domain);
         template = template.replace(/{destination}/g, dest);
+
+        // Для SSL-шаблона также заменяем {domain} на корневой домен
+        if (ssl) {
+            const rootDomain = getRootDomain(domain);
+            template = template.replace(/{domain}/g, rootDomain);
+            console.log(`🔐 Используется SSL-шаблон. Корневой домен: ${rootDomain}`);
+        }
 
         // Сохраняем конфиг
         const configPath = path.join(NGINX_CONFIG_DIR, domain+'.conf');
@@ -255,7 +275,7 @@ app.post('/api/items', requireAuth, async (req, res) => {
 
     // Создаем nginx конфиг, если запись активна
     if (newItem.active) {
-        createNginxConfig(domain, dest);
+        createNginxConfig(domain, dest, newItem.ssl);
 
         // Проверяем и перезагружаем nginx
         const nginxResult = await applyNginxChanges();
@@ -303,7 +323,7 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
 
         // Управляем конфигом в зависимости от статуса active
         if (items[itemIndex].active) {
-            createNginxConfig(domain, dest);
+            createNginxConfig(domain, dest, items[itemIndex].ssl);
         } else {
             deleteNginxConfig(domain);
         }
@@ -317,10 +337,10 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
 
             // Восстанавливаем конфиги
             if (oldDomain !== domain && oldActive) {
-                createNginxConfig(oldDomain, oldItem.dest);
+                createNginxConfig(oldDomain, oldItem.dest, oldItem.ssl);
             }
             if (oldActive) {
-                createNginxConfig(oldDomain, oldItem.dest);
+                createNginxConfig(oldDomain, oldItem.dest, oldItem.ssl);
             } else {
                 deleteNginxConfig(domain);
             }
@@ -350,7 +370,7 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
 
         // Пересоздаем конфиг с новыми параметрами, если запись активна
         if (items[itemIndex].active) {
-            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
 
             // Проверяем и перезагружаем nginx
             const nginxResult = await applyNginxChanges();
@@ -358,7 +378,7 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
                 // Откатываем изменения при ошибке
                 items[itemIndex].ssl = oldSsl;
                 saveItems();
-                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, oldSsl);
 
                 return res.status(500).json({
                     error: 'Ошибка конфигурации Nginx',
@@ -386,7 +406,7 @@ app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
 
         // Управляем конфигом в зависимости от нового статуса
         if (active) {
-            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
         } else {
             deleteNginxConfig(items[itemIndex].domain);
         }
@@ -400,7 +420,7 @@ app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
 
             // Восстанавливаем конфиг
             if (oldActive) {
-                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
             } else {
                 deleteNginxConfig(items[itemIndex].domain);
             }
@@ -439,7 +459,7 @@ app.delete('/api/items/:id', requireAuth, async (req, res) => {
 
             // Восстанавливаем конфиг если он был активен
             if (deletedItem.active) {
-                createNginxConfig(domain, deletedItem.dest);
+                createNginxConfig(domain, deletedItem.dest, deletedItem.ssl);
             }
 
             return res.status(500).json({
@@ -467,6 +487,113 @@ app.post('/api/change-password', requireAuth, async (req, res) => {
     }
 });
 
+// Получение SSL-сертификата через Let's Encrypt
+app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
+    const { domain, email, regru_username, regru_password } = req.body;
+
+    if (!domain || !email || !regru_username || !regru_password) {
+        return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
+    }
+
+    try {
+        console.log('🔐 Начало процесса получения SSL-сертификата...');
+        console.log(`   Домен: ${domain}`);
+        console.log(`   Email: ${email}`);
+
+        // Шаг 1: Регистрация аккаунта
+        console.log('📝 Шаг 1: Регистрация аккаунта в Let\'s Encrypt...');
+        const registerCommand = `docker exec -e REGRU_API_Username='${regru_username}' -e REGRU_API_Password='${regru_password}' acme_sh acme.sh --register-account -m ${email}`;
+
+        let registerResult;
+        try {
+            registerResult = await execPromise(registerCommand);
+            console.log('✅ Аккаунт зарегистрирован успешно');
+        } catch (error) {
+            const errorOutput = error.stdout + error.stderr;
+            console.error('❌ Ошибка регистрации аккаунта:', errorOutput);
+
+            // Проверяем, может аккаунт уже зарегистрирован
+            if (errorOutput.includes('already registered') || errorOutput.includes('Account already exists')) {
+                console.log('ℹ️  Аккаунт уже зарегистрирован, продолжаем...');
+            } else {
+                return res.status(500).json({
+                    error: 'Ошибка при регистрации аккаунта Let\'s Encrypt',
+                    details: errorOutput,
+                    step: 'registration'
+                });
+            }
+        }
+
+        // Шаг 2: Получение сертификата
+        console.log('🔒 Шаг 2: Получение SSL-сертификата...');
+        const issueCommand = `docker exec -e REGRU_API_Username='${regru_username}' -e REGRU_API_Password='${regru_password}' acme_sh acme.sh --issue --dns dns_regru -d '*.${domain}'  --server letsencrypt`;
+
+        let issueResult;
+        let alreadyExists = false;
+        let renewalDate = '';
+
+        try {
+            issueResult = await execPromise(issueCommand);
+            console.log('✅ Сертификат получен успешно!');
+        } catch (error) {
+            const errorOutput = error.stdout + error.stderr;
+
+            // Проверяем, может сертификат уже существует и действует
+            if (errorOutput.includes('Domains not changed') &&
+                errorOutput.includes('Skipping') &&
+                errorOutput.includes('Next renewal time is')) {
+                console.log('ℹ️  Сертификат уже существует и действителен');
+                alreadyExists = true;
+                issueResult = { stdout: errorOutput, stderr: '' };
+
+                // Извлекаем дату следующего обновления
+                const renewalMatch = errorOutput.match(/Next renewal time is: ([^\n]+)/);
+                if (renewalMatch) {
+                    renewalDate = renewalMatch[1];
+                }
+            } else {
+                console.error('❌ Ошибка получения сертификата:', errorOutput);
+                return res.status(500).json({
+                    error: 'Ошибка при получении SSL-сертификата',
+                    details: errorOutput,
+                    step: 'certificate'
+                });
+            }
+        }
+
+        // Определяем путь к сертификатам
+        const certPath = `/acme.sh/*.${domain}_ecc`;
+        const certFiles = {
+            fullchain: `${certPath}/fullchain.cer`,
+            key: `${certPath}/*.${domain}.key`,
+            cert: `${certPath}/*.${domain}.cer`,
+            ca: `${certPath}/ca.cer`
+        };
+
+        console.log('📁 Сертификаты сохранены в:', certPath);
+
+        res.json({
+            success: true,
+            message: alreadyExists
+                ? 'SSL-сертификат уже существует и действителен!'
+                : 'SSL-сертификат успешно получен!',
+            alreadyExists: alreadyExists,
+            renewalDate: renewalDate,
+            domain: domain,
+            certPath: certPath,
+            certFiles: certFiles,
+            output: issueResult.stdout + issueResult.stderr
+        });
+
+    } catch (error) {
+        console.error('❌ Непредвиденная ошибка:', error);
+        res.status(500).json({
+            error: 'Непредвиденная ошибка при получении сертификата',
+            details: error.message
+        });
+    }
+});
+
 // Запуск сервера
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
@@ -477,4 +604,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`   - ${ITEMS_DATA_FILE}`);
     console.log(`📁 Nginx конфиги: ${NGINX_CONFIG_DIR}`);
     console.log(`📄 Шаблон nginx: ${NGINX_TEMPLATE_PATH}`);
+    console.log(`🔐 Шаблон nginx SSL: ${NGINX_SSL_TEMPLATE_PATH}`);
 });

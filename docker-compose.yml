@@ -9,6 +9,7 @@ services:
     volumes:
       # Файлы сайта
       - ./website:/var/www/html
+      - ./acme:/acme
       # Конфигурационные файлы Nginx
       - ./configs/nginx/sites:/etc/nginx/conf.d/:ro
       - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -66,6 +67,17 @@ services:
       - web_network
 
 
+
+  acme-sh:
+    image: neilpang/acme.sh
+    container_name: acme_sh
+    volumes:
+      - ./acme:/acme.sh
+    network_mode: host
+    command: daemon
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
 
 
 
