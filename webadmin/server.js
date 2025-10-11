@@ -4,6 +4,9 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const app = express();
 const PORT = 8881;
@@ -126,6 +129,50 @@ function deleteNginxConfig(domain) {
     }
 }
 
+// Функция для проверки конфигурации nginx
+async function testNginxConfig() {
+    try {
+        const { stdout, stderr } = await execPromise('docker exec nginx_webserver nginx -t 2>&1');
+        console.log('✅ Nginx конфигурация валидна');
+        return { success: true, output: stdout + stderr };
+    } catch (error) {
+        console.error('❌ Ошибка в конфигурации nginx:', error.stdout + error.stderr);
+        return {
+            success: false,
+            error: error.stdout + error.stderr,
+            message: 'Ошибка в конфигурации nginx'
+        };
+    }
+}
+
+// Функция для перезагрузки nginx
+async function reloadNginx() {
+    try {
+        const { stdout, stderr } = await execPromise('docker exec nginx_webserver nginx -s reload 2>&1');
+        console.log('🔄 Nginx перезагружен успешно');
+        return { success: true, output: stdout + stderr };
+    } catch (error) {
+        console.error('❌ Ошибка при перезагрузке nginx:', error.stdout + error.stderr);
+        return {
+            success: false,
+            error: error.stdout + error.stderr,
+            message: 'Ошибка при перезагрузке nginx'
+        };
+    }
+}
+
+// Функция для применения изменений nginx (проверка + перезагрузка)
+async function applyNginxChanges() {
+    // Сначала проверяем конфигурацию
+    const testResult = await testNginxConfig();
+    if (!testResult.success) {
+        return testResult;
+    }
+
+    // Если проверка прошла успешно, перезагружаем
+    return await reloadNginx();
+}
+
 // Загрузка данных при старте
 let userData = loadUserData();
 const itemsData = loadItems();
@@ -193,7 +240,7 @@ app.get('/api/items', requireAuth, (req, res) => {
     res.json(items);
 });
 
-app.post('/api/items', requireAuth, (req, res) => {
+app.post('/api/items', requireAuth, async (req, res) => {
     const { domain, dest, item3, ssl, active } = req.body;
     const newItem = {
         id: itemIdCounter++,
@@ -209,17 +256,33 @@ app.post('/api/items', requireAuth, (req, res) => {
     // Создаем nginx конфиг, если запись активна
     if (newItem.active) {
         createNginxConfig(domain, dest);
+
+        // Проверяем и перезагружаем nginx
+        const nginxResult = await applyNginxChanges();
+        if (!nginxResult.success) {
+            // Если ошибка, откатываем изменения
+            items.pop();
+            itemIdCounter--;
+            saveItems();
+            deleteNginxConfig(domain);
+
+            return res.status(500).json({
+                error: 'Ошибка конфигурации Nginx',
+                details: nginxResult.error
+            });
+        }
     }
 
     res.json(newItem);
 });
 
-app.put('/api/items/:id', requireAuth, (req, res) => {
+app.put('/api/items/:id', requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const { domain, dest, item3, ssl, active } = req.body;
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const oldItem = { ...items[itemIndex] };
         const oldDomain = items[itemIndex].domain;
         const oldActive = items[itemIndex].active;
 
@@ -245,6 +308,29 @@ app.put('/api/items/:id', requireAuth, (req, res) => {
             deleteNginxConfig(domain);
         }
 
+        // Проверяем и перезагружаем nginx
+        const nginxResult = await applyNginxChanges();
+        if (!nginxResult.success) {
+            // Откатываем изменения при ошибке
+            items[itemIndex] = oldItem;
+            saveItems();
+
+            // Восстанавливаем конфиги
+            if (oldDomain !== domain && oldActive) {
+                createNginxConfig(oldDomain, oldItem.dest);
+            }
+            if (oldActive) {
+                createNginxConfig(oldDomain, oldItem.dest);
+            } else {
+                deleteNginxConfig(domain);
+            }
+
+            return res.status(500).json({
+                error: 'Ошибка конфигурации Nginx',
+                details: nginxResult.error
+            });
+        }
+
         res.json(items[itemIndex]);
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
@@ -252,18 +338,33 @@ app.put('/api/items/:id', requireAuth, (req, res) => {
 });
 
 // Endpoint для переключения SSL
-app.patch('/api/items/:id/toggle-ssl', requireAuth, (req, res) => {
+app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const { ssl } = req.body;
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const oldSsl = items[itemIndex].ssl;
         items[itemIndex].ssl = ssl;
         saveItems(); // Сохраняем в файл
 
         // Пересоздаем конфиг с новыми параметрами, если запись активна
         if (items[itemIndex].active) {
             createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+
+            // Проверяем и перезагружаем nginx
+            const nginxResult = await applyNginxChanges();
+            if (!nginxResult.success) {
+                // Откатываем изменения при ошибке
+                items[itemIndex].ssl = oldSsl;
+                saveItems();
+                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+
+                return res.status(500).json({
+                    error: 'Ошибка конфигурации Nginx',
+                    details: nginxResult.error
+                });
+            }
         }
 
         res.json({ success: true, ssl: items[itemIndex].ssl });
@@ -273,12 +374,13 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, (req, res) => {
 });
 
 // Endpoint для переключения активности записи
-app.patch('/api/items/:id/toggle-active', requireAuth, (req, res) => {
+app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const { active } = req.body;
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const oldActive = items[itemIndex].active;
         items[itemIndex].active = active;
         saveItems(); // Сохраняем в файл
 
@@ -289,23 +391,62 @@ app.patch('/api/items/:id/toggle-active', requireAuth, (req, res) => {
             deleteNginxConfig(items[itemIndex].domain);
         }
 
+        // Проверяем и перезагружаем nginx
+        const nginxResult = await applyNginxChanges();
+        if (!nginxResult.success) {
+            // Откатываем изменения при ошибке
+            items[itemIndex].active = oldActive;
+            saveItems();
+
+            // Восстанавливаем конфиг
+            if (oldActive) {
+                createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+            } else {
+                deleteNginxConfig(items[itemIndex].domain);
+            }
+
+            return res.status(500).json({
+                error: 'Ошибка конфигурации Nginx',
+                details: nginxResult.error
+            });
+        }
+
         res.json({ success: true, active: items[itemIndex].active });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
     }
 });
 
-app.delete('/api/items/:id', requireAuth, (req, res) => {
+app.delete('/api/items/:id', requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const deletedItem = { ...items[itemIndex] };
         const domain = items[itemIndex].domain;
         items.splice(itemIndex, 1);
         saveItems(); // Сохраняем в файл
 
         // Удаляем nginx конфиг
         deleteNginxConfig(domain);
+
+        // Проверяем и перезагружаем nginx
+        const nginxResult = await applyNginxChanges();
+        if (!nginxResult.success) {
+            // Откатываем изменения при ошибке
+            items.splice(itemIndex, 0, deletedItem);
+            saveItems();
+
+            // Восстанавливаем конфиг если он был активен
+            if (deletedItem.active) {
+                createNginxConfig(domain, deletedItem.dest);
+            }
+
+            return res.status(500).json({
+                error: 'Ошибка конфигурации Nginx',
+                details: nginxResult.error
+            });
+        }
 
         res.json({ success: true });
     } else {

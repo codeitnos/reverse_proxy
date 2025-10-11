@@ -204,11 +204,21 @@
             max-width: 500px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
+        .modal-content.error-modal {
+            max-width: 700px;
+        }
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+        }
+        .modal-header.error-header {
+            border-bottom: 2px solid #dc3545;
+            padding-bottom: 15px;
+        }
+        .modal-header.error-header h2 {
+            color: #dc3545;
         }
         .close {
             font-size: 28px;
@@ -225,6 +235,28 @@
             color: #6c757d;
         }
         .empty-state h3 {
+            margin-bottom: 10px;
+        }
+        .error-details {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error-details pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #721c24;
+        }
+        .error-message {
+            color: #721c24;
+            font-weight: 500;
             margin-bottom: 10px;
         }
     </style>
@@ -337,8 +369,35 @@
     </div>
 </div>
 
+<!-- Модальное окно для ошибок Nginx -->
+<div id="nginxErrorModal" class="modal">
+    <div class="modal-content error-modal">
+        <div class="modal-header error-header">
+            <h2>⚠️ Ошибка конфигурации Nginx</h2>
+            <span class="close" onclick="closeNginxErrorModal()">&times;</span>
+        </div>
+        <div class="error-message" id="nginxErrorMessage"></div>
+        <div class="error-details">
+            <pre id="nginxErrorDetails"></pre>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+            <button class="btn btn-primary" onclick="closeNginxErrorModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
 <script>
     loadItems();
+
+    function showNginxError(message, details) {
+        document.getElementById('nginxErrorMessage').textContent = message || 'Произошла ошибка при проверке конфигурации Nginx';
+        document.getElementById('nginxErrorDetails').textContent = details || 'Нет дополнительной информации';
+        document.getElementById('nginxErrorModal').style.display = 'block';
+    }
+
+    function closeNginxErrorModal() {
+        document.getElementById('nginxErrorModal').style.display = 'none';
+    }
 
     document.getElementById('addForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -363,6 +422,13 @@
             document.querySelector('[name="ssl"]').checked = false;
             loadItems();
             alert('Запись успешно добавлена!');
+        } else {
+            const error = await response.json();
+            if (error.details) {
+                showNginxError(error.error, error.details);
+            } else {
+                alert(error.error || 'Ошибка при добавлении записи');
+            }
         }
     });
 
@@ -423,7 +489,12 @@
         if (response.ok) {
             loadItems();
         } else {
-            alert('Ошибка при изменении SSL');
+            const error = await response.json();
+            if (error.details) {
+                showNginxError(error.error, error.details);
+            } else {
+                alert('Ошибка при изменении SSL');
+            }
             loadItems();
         }
     }
@@ -438,7 +509,12 @@
         if (response.ok) {
             loadItems();
         } else {
-            alert('Ошибка при изменении статуса');
+            const error = await response.json();
+            if (error.details) {
+                showNginxError(error.error, error.details);
+            } else {
+                alert('Ошибка при изменении статуса');
+            }
             loadItems();
         }
     }
@@ -478,6 +554,15 @@
             closeEditModal();
             loadItems();
             alert('Запись успешно обновлена!');
+        } else {
+            const error = await response.json();
+            if (error.details) {
+                closeEditModal();
+                showNginxError(error.error, error.details);
+            } else {
+                alert(error.error || 'Ошибка при обновлении записи');
+            }
+            loadItems();
         }
     });
 
@@ -491,6 +576,14 @@
         if (response.ok) {
             loadItems();
             alert('Запись успешно удалена!');
+        } else {
+            const error = await response.json();
+            if (error.details) {
+                showNginxError(error.error, error.details);
+            } else {
+                alert(error.error || 'Ошибка при удалении записи');
+            }
+            loadItems();
         }
     }
 
@@ -532,11 +625,15 @@
     window.onclick = function(event) {
         const editModal = document.getElementById('editModal');
         const passwordModal = document.getElementById('passwordModal');
+        const nginxErrorModal = document.getElementById('nginxErrorModal');
         if (event.target === editModal) {
             closeEditModal();
         }
         if (event.target === passwordModal) {
             closePasswordModal();
+        }
+        if (event.target === nginxErrorModal) {
+            closeNginxErrorModal();
         }
     }
 </script>
