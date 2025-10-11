@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление записями</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+        }
+        h1 {
+            color: #667eea;
+            font-size: 28px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .form-section h2 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #495057;
+            font-weight: 500;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .items-list {
+            display: grid;
+            gap: 15px;
+        }
+        .item-card {
+            background: #fff;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        .item-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        .item-content {
+            margin-bottom: 15px;
+        }
+        .item-content p {
+            margin: 8px 0;
+            color: #495057;
+            line-height: 1.5;
+        }
+        .item-content strong {
+            color: #667eea;
+        }
+        .item-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .close {
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .empty-state h3 {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📝 Управление записями</h1>
+        <div class="header-buttons">
+            <button class="btn btn-secondary" onclick="openChangePasswordModal()">🔒 Сменить пароль</button>
+            <a href="/logout" class="btn btn-danger">🚪 Выход</a>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2>➕ Добавить новую запись</h2>
+        <form id="addForm">
+            <div class="form-group">
+                <label>Пункт 1:</label>
+                <input type="text" name="item1" required>
+            </div>
+            <div class="form-group">
+                <label>Пункт 2:</label>
+                <input type="text" name="item2" required>
+            </div>
+            <div class="form-group">
+                <label>Пункт 3:</label>
+                <input type="text" name="item3" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Добавить запись</button>
+        </form>
+    </div>
+
+    <h2 style="margin-bottom: 20px; color: #495057;">📋 Список записей</h2>
+    <div id="itemsList" class="items-list"></div>
+</div>
+
+<!-- Модальное окно для редактирования -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>✏️ Редактировать запись</h2>
+            <span class="close" onclick="closeEditModal()">&times;</span>
+        </div>
+        <form id="editForm">
+            <input type="hidden" id="editId">
+            <div class="form-group">
+                <label>Пункт 1:</label>
+                <input type="text" id="editItem1" required>
+            </div>
+            <div class="form-group">
+                <label>Пункт 2:</label>
+                <input type="text" id="editItem2" required>
+            </div>
+            <div class="form-group">
+                <label>Пункт 3:</label>
+                <input type="text" id="editItem3" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно для смены пароля -->
+<div id="passwordModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>🔒 Смена пароля</h2>
+            <span class="close" onclick="closePasswordModal()">&times;</span>
+        </div>
+        <form id="passwordForm">
+            <div class="form-group">
+                <label>Текущий пароль:</label>
+                <input type="password" id="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label>Новый пароль:</label>
+                <input type="password" id="newPassword" required>
+            </div>
+            <div class="form-group">
+                <label>Подтвердите новый пароль:</label>
+                <input type="password" id="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Изменить пароль</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    loadItems();
+
+    document.getElementById('addForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = {
+            item1: formData.get('item1'),
+            item2: formData.get('item2'),
+            item3: formData.get('item3')
+        };
+
+        const response = await fetch('/api/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            e.target.reset();
+            loadItems();
+            alert('Запись успешно добавлена!');
+        }
+    });
+
+    async function loadItems() {
+        const response = await fetch('/api/items');
+        const items = await response.json();
+        const itemsList = document.getElementById('itemsList');
+
+        if (items.length === 0) {
+            itemsList.innerHTML = '<div class="empty-state"><h3>Нет записей</h3><p>Добавьте первую запись, используя форму выше</p></div>';
+            return;
+        }
+
+        itemsList.innerHTML = items.map(item => `
+        <div class="item-card">
+          <div class="item-content">
+            <p><strong>Пункт 1:</strong> ${item.item1}</p>
+            <p><strong>Пункт 2:</strong> ${item.item2}</p>
+            <p><strong>Пункт 3:</strong> ${item.item3}</p>
+          </div>
+          <div class="item-actions">
+            <button class="btn btn-primary" onclick="openEditModal(${item.id}, '${item.item1}', '${item.item2}', '${item.item3}')">✏️ Редактировать</button>
+            <button class="btn btn-danger" onclick="deleteItem(${item.id})">🗑️ Удалить</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openEditModal(id, item1, item2, item3) {
+        document.getElementById('editId').value = id;
+        document.getElementById('editItem1').value = item1;
+        document.getElementById('editItem2').value = item2;
+        document.getElementById('editItem3').value = item3;
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    document.getElementById('editForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editId').value;
+        const data = {
+            item1: document.getElementById('editItem1').value,
+            item2: document.getElementById('editItem2').value,
+            item3: document.getElementById('editItem3').value
+        };
+
+        const response = await fetch(`/api/items/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            closeEditModal();
+            loadItems();
+            alert('Запись успешно обновлена!');
+        }
+    });
+
+    async function deleteItem(id) {
+        if (!confirm('Вы уверены, что хотите удалить эту запись?')) return;
+
+        const response = await fetch(`/api/items/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            loadItems();
+            alert('Запись успешно удалена!');
+        }
+    }
+
+    function openChangePasswordModal() {
+        document.getElementById('passwordModal').style.display = 'block';
+    }
+
+    function closePasswordModal() {
+        document.getElementById('passwordModal').style.display = 'none';
+        document.getElementById('passwordForm').reset();
+    }
+
+    document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        if (newPassword !== confirmPassword) {
+            alert('Новые пароли не совпадают!');
+            return;
+        }
+
+        const response = await fetch('/api/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            alert('Пароль успешно изменен!');
+            closePasswordModal();
+        } else {
+            alert(result.error || 'Ошибка при смене пароля');
+        }
+    });
+
+    window.onclick = function(event) {
+        const editModal = document.getElementById('editModal');
+        const passwordModal = document.getElementById('passwordModal');
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+        if (event.target === passwordModal) {
+            closePasswordModal();
+        }
+    }
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ services:
     image: nginx:1.25-alpine
     container_name: nginx_webserver
     ports:
-      - "8080:80"
+      - "80:80"
       - "443:443"
     volumes:
       # Файлы сайта
@@ -12,6 +12,7 @@ services:
       # Конфигурационные файлы Nginx
       - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./configs/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./configs/nginx/taskid.ru.conf:/etc/nginx/conf.d/taskid.ru.conf:ro
       # Логи выводим наружу
       - ./logs/nginx:/var/log/nginx
     depends_on:
@@ -40,6 +41,24 @@ services:
       - web_network
       - db_network
     restart: unless-stopped
+
+
+  webadmin-app:
+    container_name: webadmin-app
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    ports:
+      - "8881:8881"
+    volumes:
+      # Монтируем всю папку webadmin в /app контейнера
+      - ./webadmin:/app
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - web_network
 
 
 
