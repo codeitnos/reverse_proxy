@@ -16,6 +16,10 @@ const DATA_DIR = "/data";
 const USER_DATA_FILE = path.join(DATA_DIR, 'user.json');
 const ITEMS_DATA_FILE = path.join(DATA_DIR, 'items.json');
 
+// Пути для nginx конфигов
+const NGINX_CONFIG_DIR = '/nginx_config';
+const NGINX_TEMPLATE_PATH = '/app/nginx/template.conf';
+
 // Функция для загрузки данных пользователя
 function loadUserData() {
     try {
@@ -71,6 +75,54 @@ function saveItems() {
         console.log('✅ Записи сохранены');
     } catch (error) {
         console.error('❌ Ошибка при сохранении записей:', error);
+    }
+}
+
+// Функция для создания nginx конфига из шаблона
+function createNginxConfig(domain, dest) {
+    try {
+        // Проверяем существование папки nginx_config
+        if (!fs.existsSync(NGINX_CONFIG_DIR)) {
+            fs.mkdirSync(NGINX_CONFIG_DIR, { recursive: true });
+            console.log('📁 Создана папка для nginx конфигов');
+        }
+
+        // Читаем шаблон
+        if (!fs.existsSync(NGINX_TEMPLATE_PATH)) {
+            console.error('❌ Шаблон nginx не найден:', NGINX_TEMPLATE_PATH);
+            return false;
+        }
+
+        let template = fs.readFileSync(NGINX_TEMPLATE_PATH, 'utf8');
+
+        // Заменяем параметры
+        template = template.replace(/{domain}/g, domain);
+        template = template.replace(/{destination}/g, dest);
+
+        // Сохраняем конфиг
+        const configPath = path.join(NGINX_CONFIG_DIR, domain);
+        fs.writeFileSync(configPath, template, 'utf8');
+        console.log(`✅ Создан nginx конфиг: ${configPath}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Ошибка при создании nginx конфига:', error);
+        return false;
+    }
+}
+
+// Функция для удаления nginx конфига
+function deleteNginxConfig(domain) {
+    try {
+        const configPath = path.join(NGINX_CONFIG_DIR, domain);
+        if (fs.existsSync(configPath)) {
+            fs.unlinkSync(configPath);
+            console.log(`🗑️  Удален nginx конфиг: ${configPath}`);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('❌ Ошибка при удалении nginx конфига:', error);
+        return false;
     }
 }
 
@@ -153,6 +205,12 @@ app.post('/api/items', requireAuth, (req, res) => {
     };
     items.push(newItem);
     saveItems(); // Сохраняем в файл
+
+    // Создаем nginx конфиг, если запись активна
+    if (newItem.active) {
+        createNginxConfig(domain, dest);
+    }
+
     res.json(newItem);
 });
 
@@ -162,6 +220,9 @@ app.put('/api/items/:id', requireAuth, (req, res) => {
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const oldDomain = items[itemIndex].domain;
+        const oldActive = items[itemIndex].active;
+
         items[itemIndex] = {
             id,
             domain,
@@ -171,6 +232,19 @@ app.put('/api/items/:id', requireAuth, (req, res) => {
             active: active !== undefined ? active : items[itemIndex].active
         };
         saveItems(); // Сохраняем в файл
+
+        // Удаляем старый конфиг, если домен изменился
+        if (oldDomain !== domain) {
+            deleteNginxConfig(oldDomain);
+        }
+
+        // Управляем конфигом в зависимости от статуса active
+        if (items[itemIndex].active) {
+            createNginxConfig(domain, dest);
+        } else {
+            deleteNginxConfig(domain);
+        }
+
         res.json(items[itemIndex]);
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
@@ -186,6 +260,12 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, (req, res) => {
     if (itemIndex !== -1) {
         items[itemIndex].ssl = ssl;
         saveItems(); // Сохраняем в файл
+
+        // Пересоздаем конфиг с новыми параметрами, если запись активна
+        if (items[itemIndex].active) {
+            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+        }
+
         res.json({ success: true, ssl: items[itemIndex].ssl });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
@@ -201,6 +281,14 @@ app.patch('/api/items/:id/toggle-active', requireAuth, (req, res) => {
     if (itemIndex !== -1) {
         items[itemIndex].active = active;
         saveItems(); // Сохраняем в файл
+
+        // Управляем конфигом в зависимости от нового статуса
+        if (active) {
+            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest);
+        } else {
+            deleteNginxConfig(items[itemIndex].domain);
+        }
+
         res.json({ success: true, active: items[itemIndex].active });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
@@ -212,8 +300,13 @@ app.delete('/api/items/:id', requireAuth, (req, res) => {
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const domain = items[itemIndex].domain;
         items.splice(itemIndex, 1);
         saveItems(); // Сохраняем в файл
+
+        // Удаляем nginx конфиг
+        deleteNginxConfig(domain);
+
         res.json({ success: true });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
@@ -241,4 +334,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`💾 Данные сохраняются в файлы:`);
     console.log(`   - ${USER_DATA_FILE}`);
     console.log(`   - ${ITEMS_DATA_FILE}`);
+    console.log(`📁 Nginx конфиги: ${NGINX_CONFIG_DIR}`);
+    console.log(`📄 Шаблон nginx: ${NGINX_TEMPLATE_PATH}`);
 });
