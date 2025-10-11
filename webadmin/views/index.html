@@ -113,13 +113,21 @@
             border-radius: 10px;
             padding: 20px;
             transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
         }
         .item-card:hover {
             border-color: #667eea;
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
         }
+        .item-card.inactive {
+            opacity: 0.6;
+            background: #f8f9fa;
+        }
         .item-content {
-            margin-bottom: 15px;
+            flex: 1;
         }
         .item-content p {
             margin: 8px 0;
@@ -129,9 +137,53 @@
         .item-content strong {
             color: #667eea;
         }
+        .item-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e9ecef;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .status-label {
+            font-size: 14px;
+            color: #6c757d;
+            cursor: pointer;
+        }
         .item-actions {
             display: flex;
             gap: 10px;
+            align-items: center;
+        }
+        .icon-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            transition: all 0.3s;
+            border-radius: 5px;
+            line-height: 1;
+        }
+        .icon-btn:hover {
+            background: #f8f9fa;
+            transform: scale(1.1);
+        }
+        .icon-btn.edit:hover {
+            color: #667eea;
+        }
+        .icon-btn.delete:hover {
+            color: #dc3545;
         }
         .modal {
             display: none;
@@ -191,16 +243,28 @@
         <h2>➕ Добавить новую запись</h2>
         <form id="addForm">
             <div class="form-group">
-                <label>Пункт 1:</label>
-                <input type="text" name="item1" required>
+                <label>Источник:</label>
+                <input type="text" name="domain" required>
             </div>
             <div class="form-group">
-                <label>Пункт 2:</label>
-                <input type="text" name="item2" required>
+                <label>Направление:</label>
+                <input type="text" name="dest" required>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="display: none;">
                 <label>Пункт 3:</label>
-                <input type="text" name="item3" required>
+                <input type="text" name="item3" >
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" name="ssl" style="width: auto; cursor: pointer;">
+                    <span>SSL</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" name="active" checked style="width: auto; cursor: pointer;">
+                    <span>Запись активна</span>
+                </label>
             </div>
             <button type="submit" class="btn btn-primary">Добавить запись</button>
         </form>
@@ -220,16 +284,28 @@
         <form id="editForm">
             <input type="hidden" id="editId">
             <div class="form-group">
-                <label>Пункт 1:</label>
-                <input type="text" id="editItem1" required>
+                <label>Источник:</label>
+                <input type="text" id="editDomain" required>
             </div>
             <div class="form-group">
-                <label>Пункт 2:</label>
-                <input type="text" id="editItem2" required>
+                <label>Направление:</label>
+                <input type="text" id="editDest" required>
             </div>
-            <div class="form-group">
+            <div class="form-group"  style="display: none;">
                 <label>Пункт 3:</label>
-                <input type="text" id="editItem3" required>
+                <input type="text" id="editItem3" >
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="editSsl" style="width: auto; cursor: pointer;">
+                    <span>SSL</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="editActive" style="width: auto; cursor: pointer;">
+                    <span>Запись активна</span>
+                </label>
             </div>
             <button type="submit" class="btn btn-primary">Сохранить изменения</button>
         </form>
@@ -268,9 +344,11 @@
         e.preventDefault();
         const formData = new FormData(e.target);
         const data = {
-            item1: formData.get('item1'),
-            item2: formData.get('item2'),
-            item3: formData.get('item3')
+            domain: formData.get('domain'),
+            dest: formData.get('dest'),
+            item3: formData.get('item3'),
+            ssl: formData.get('ssl') === 'on',
+            active: formData.get('active') === 'on'
         };
 
         const response = await fetch('/api/items', {
@@ -281,6 +359,8 @@
 
         if (response.ok) {
             e.target.reset();
+            document.querySelector('[name="active"]').checked = true;
+            document.querySelector('[name="ssl"]').checked = false;
             loadItems();
             alert('Запись успешно добавлена!');
         }
@@ -297,25 +377,79 @@
         }
 
         itemsList.innerHTML = items.map(item => `
-        <div class="item-card">
+        <div class="item-card ${item.active ? '' : 'inactive'}">
           <div class="item-content">
-            <p><strong>Пункт 1:</strong> ${item.item1}</p>
-            <p><strong>Пункт 2:</strong> ${item.item2}</p>
-            <p><strong>Пункт 3:</strong> ${item.item3}</p>
+            <p><strong>Источник:</strong> ${escapeHtml(item.domain)}</p>
+            <p><strong>Направление:</strong> ${escapeHtml(item.dest)}</p>
+            <p style="display: none;"><strong>Пункт 3:</strong> ${escapeHtml(item.item3)}</p>
+            <div class="item-status">
+              <div class="status-item">
+                <input type="checkbox" class="status-checkbox" ${item.ssl ? 'checked' : ''}
+                       onchange="toggleSsl(${item.id}, this.checked)">
+                <span class="status-label" onclick="this.previousElementSibling.click()">
+                  ${item.ssl ? 'SSL включен' : 'SSL выключен'}
+                </span>
+              </div>
+              <div class="status-item">
+                <input type="checkbox" class="status-checkbox" ${item.active ? 'checked' : ''}
+                       onchange="toggleActive(${item.id}, this.checked)">
+                <span class="status-label" onclick="this.previousElementSibling.click()">
+                  ${item.active ? 'Активна' : 'Неактивна'}
+                </span>
+              </div>
+            </div>
           </div>
           <div class="item-actions">
-            <button class="btn btn-primary" onclick="openEditModal(${item.id}, '${item.item1}', '${item.item2}', '${item.item3}')">✏️ Редактировать</button>
-            <button class="btn btn-danger" onclick="deleteItem(${item.id})">🗑️ Удалить</button>
+            <button class="icon-btn edit" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active})" title="Редактировать">✏️</button>
+            <button class="icon-btn delete" onclick="deleteItem(${item.id})" title="Удалить">🗑️</button>
           </div>
         </div>
       `).join('');
     }
 
-    function openEditModal(id, item1, item2, item3) {
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function toggleSsl(id, ssl) {
+        const response = await fetch(`/api/items/${id}/toggle-ssl`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ssl })
+        });
+
+        if (response.ok) {
+            loadItems();
+        } else {
+            alert('Ошибка при изменении SSL');
+            loadItems();
+        }
+    }
+
+    async function toggleActive(id, active) {
+        const response = await fetch(`/api/items/${id}/toggle-active`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active })
+        });
+
+        if (response.ok) {
+            loadItems();
+        } else {
+            alert('Ошибка при изменении статуса');
+            loadItems();
+        }
+    }
+
+    function openEditModal(id, domain, dest, item3, ssl, active) {
         document.getElementById('editId').value = id;
-        document.getElementById('editItem1').value = item1;
-        document.getElementById('editItem2').value = item2;
+        document.getElementById('editDomain').value = domain;
+        document.getElementById('editDest').value = dest;
         document.getElementById('editItem3').value = item3;
+        document.getElementById('editSsl').checked = ssl;
+        document.getElementById('editActive').checked = active;
         document.getElementById('editModal').style.display = 'block';
     }
 
@@ -327,9 +461,11 @@
         e.preventDefault();
         const id = document.getElementById('editId').value;
         const data = {
-            item1: document.getElementById('editItem1').value,
-            item2: document.getElementById('editItem2').value,
-            item3: document.getElementById('editItem3').value
+            domain: document.getElementById('editDomain').value,
+            dest: document.getElementById('editDest').value,
+            item3: document.getElementById('editItem3').value,
+            ssl: document.getElementById('editSsl').checked,
+            active: document.getElementById('editActive').checked
         };
 
         const response = await fetch(`/api/items/${id}`, {

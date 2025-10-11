@@ -141,12 +141,14 @@ app.get('/api/items', requireAuth, (req, res) => {
 });
 
 app.post('/api/items', requireAuth, (req, res) => {
-    const { item1, item2, item3 } = req.body;
+    const { domain, dest, item3, ssl, active } = req.body;
     const newItem = {
         id: itemIdCounter++,
-        item1,
-        item2,
-        item3
+        domain,
+        dest,
+        item3,
+        ssl: ssl !== undefined ? ssl : false,
+        active: active !== undefined ? active : true
     };
     items.push(newItem);
     saveItems(); // Сохраняем в файл
@@ -155,13 +157,50 @@ app.post('/api/items', requireAuth, (req, res) => {
 
 app.put('/api/items/:id', requireAuth, (req, res) => {
     const id = parseInt(req.params.id);
-    const { item1, item2, item3 } = req.body;
+    const { domain, dest, item3, ssl, active } = req.body;
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
-        items[itemIndex] = { id, item1, item2, item3 };
+        items[itemIndex] = {
+            id,
+            domain,
+            dest,
+            item3,
+            ssl: ssl !== undefined ? ssl : items[itemIndex].ssl,
+            active: active !== undefined ? active : items[itemIndex].active
+        };
         saveItems(); // Сохраняем в файл
         res.json(items[itemIndex]);
+    } else {
+        res.status(404).json({ error: 'Запись не найдена' });
+    }
+});
+
+// Endpoint для переключения SSL
+app.patch('/api/items/:id/toggle-ssl', requireAuth, (req, res) => {
+    const id = parseInt(req.params.id);
+    const { ssl } = req.body;
+    const itemIndex = items.findIndex(item => item.id === id);
+
+    if (itemIndex !== -1) {
+        items[itemIndex].ssl = ssl;
+        saveItems(); // Сохраняем в файл
+        res.json({ success: true, ssl: items[itemIndex].ssl });
+    } else {
+        res.status(404).json({ error: 'Запись не найдена' });
+    }
+});
+
+// Endpoint для переключения активности записи
+app.patch('/api/items/:id/toggle-active', requireAuth, (req, res) => {
+    const id = parseInt(req.params.id);
+    const { active } = req.body;
+    const itemIndex = items.findIndex(item => item.id === id);
+
+    if (itemIndex !== -1) {
+        items[itemIndex].active = active;
+        saveItems(); // Сохраняем в файл
+        res.json({ success: true, active: items[itemIndex].active });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
     }
