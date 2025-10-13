@@ -10,6 +10,8 @@ services:
       # Файлы сайта
       - ./website:/var/www/html
       - ./acme:/acme
+      # Общая папка для ACME валидации
+      - ./acme-webroot:/var/www/acme-webroot
       # Конфигурационные файлы Nginx
       - ./configs/nginx/sites:/etc/nginx/conf.d/:ro
       - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -17,6 +19,7 @@ services:
 #      - ./configs/nginx/taskid.ru.conf:/etc/nginx/conf.d/taskid.ru.conf:ro
       # Логи выводим наружу
       - ./logs/nginx:/var/log/nginx
+#      - /var/log/nginx:/var/log/nginx
 #    depends_on:
 #      - php-fpm
     networks:
@@ -56,6 +59,7 @@ services:
     volumes:
       # Монтируем всю папку webadmin в /app контейнера
       - ./webadmin:/app
+      - ./acme:/acme.sh # доступ к сертификатам
       - node_modules:/app/node_modules  # анонимный volume, скрывает node_modules
       - ./data:/data
       - ./configs/nginx/sites:/nginx_config
@@ -73,6 +77,7 @@ services:
     container_name: acme_sh
     volumes:
       - ./acme:/acme.sh
+      - ./acme-webroot:/var/www/acme-webroot
     network_mode: host
     command: daemon
     stdin_open: true

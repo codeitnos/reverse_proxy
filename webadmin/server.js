@@ -6,13 +6,21 @@ const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
+const archiver = require('archiver');
+const AdmZip = require('adm-zip');
+const multer = require('multer');
 const execPromise = util.promisify(exec);
 
 const app = express();
 const PORT = 8881;
 
+// Настройка multer для загрузки файлов
+const upload = multer({
+    dest: '/tmp/',
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB лимит
+});
+
 // Путь к папке с данными
-// const DATA_DIR = path.join(__dirname, '/data');
 const DATA_DIR = "/data";
 
 // Пути к файлам данных
@@ -23,6 +31,9 @@ const ITEMS_DATA_FILE = path.join(DATA_DIR, 'items.json');
 const NGINX_CONFIG_DIR = '/nginx_config';
 const NGINX_TEMPLATE_PATH = '/app/nginx/template.conf';
 const NGINX_SSL_TEMPLATE_PATH = '/app/nginx/template_ssl.conf';
+
+// Путь к папке acme.sh
+const ACME_DIR = '/acme.sh';
 
 // Функция для извлечения корневого домена из поддомена
 function getRootDomain(fullDomain) {
@@ -46,7 +57,8 @@ function loadUserData() {
     // Данные по умолчанию
     return {
         username: 'admin',
-        passwordHash: bcrypt.hashSync('password123', 10)
+        passwordHash: bcrypt.hashSync('password123', 10),
+        cf_token: ''
     };
 }
 
@@ -193,6 +205,27 @@ async function applyNginxChanges() {
     return await reloadNginx();
 }
 
+// Функция для рекурсивного копирования папки
+function copyFolderRecursiveSync(source, target) {
+    if (!fs.existsSync(target)) {
+        fs.mkdirSync(target, { recursive: true });
+    }
+
+    if (fs.lstatSync(source).isDirectory()) {
+        const files = fs.readdirSync(source);
+        files.forEach(file => {
+            const curSource = path.join(source, file);
+            const curTarget = path.join(target, file);
+
+            if (fs.lstatSync(curSource).isDirectory()) {
+                copyFolderRecursiveSync(curSource, curTarget);
+            } else {
+                fs.copyFileSync(curSource, curTarget);
+            }
+        });
+    }
+}
+
 // Загрузка данных при старте
 let userData = loadUserData();
 const itemsData = loadItems();
@@ -271,7 +304,7 @@ app.post('/api/items', requireAuth, async (req, res) => {
         active: active !== undefined ? active : true
     };
     items.push(newItem);
-    saveItems(); // Сохраняем в файл
+    saveItems();
 
     // Создаем nginx конфиг, если запись активна
     if (newItem.active) {
@@ -314,7 +347,7 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
             ssl: ssl !== undefined ? ssl : items[itemIndex].ssl,
             active: active !== undefined ? active : items[itemIndex].active
         };
-        saveItems(); // Сохраняем в файл
+        saveItems();
 
         // Удаляем старый конфиг, если домен изменился
         if (oldDomain !== domain) {
@@ -366,7 +399,7 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
     if (itemIndex !== -1) {
         const oldSsl = items[itemIndex].ssl;
         items[itemIndex].ssl = ssl;
-        saveItems(); // Сохраняем в файл
+        saveItems();
 
         // Пересоздаем конфиг с новыми параметрами, если запись активна
         if (items[itemIndex].active) {
@@ -402,7 +435,7 @@ app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
     if (itemIndex !== -1) {
         const oldActive = items[itemIndex].active;
         items[itemIndex].active = active;
-        saveItems(); // Сохраняем в файл
+        saveItems();
 
         // Управляем конфигом в зависимости от нового статуса
         if (active) {
@@ -445,7 +478,7 @@ app.delete('/api/items/:id', requireAuth, async (req, res) => {
         const deletedItem = { ...items[itemIndex] };
         const domain = items[itemIndex].domain;
         items.splice(itemIndex, 1);
-        saveItems(); // Сохраняем в файл
+        saveItems();
 
         // Удаляем nginx конфиг
         deleteNginxConfig(domain);
@@ -480,53 +513,327 @@ app.post('/api/change-password', requireAuth, async (req, res) => {
 
     if (await bcrypt.compare(currentPassword, userData.passwordHash)) {
         userData.passwordHash = await bcrypt.hash(newPassword, 10);
-        saveUserData(userData); // Сохраняем в файл
+        saveUserData(userData);
         res.json({ success: true });
     } else {
         res.status(401).json({ error: 'Неверный текущий пароль' });
     }
 });
 
-// Получение SSL-сертификата через Let's Encrypt
-app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
-    const { domain, email, regru_username, regru_password } = req.body;
+// Сохранение CloudFlare токена
+app.post('/api/save-cf-token', requireAuth, async (req, res) => {
+    const { cf_token } = req.body;
 
-    if (!domain || !email || !regru_username || !regru_password) {
-        return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
+    if (!cf_token) {
+        return res.status(400).json({ error: 'Токен CloudFlare обязателен' });
     }
 
     try {
-        console.log('🔐 Начало процесса получения SSL-сертификата...');
-        console.log(`   Домен: ${domain}`);
-        console.log(`   Email: ${email}`);
+        userData.cf_token = cf_token;
+        saveUserData(userData);
+        res.json({ success: true, message: 'Токен CloudFlare успешно сохранен' });
+    } catch (error) {
+        console.error('❌ Ошибка при сохранении токена:', error);
+        res.status(500).json({ error: 'Ошибка при сохранении токена' });
+    }
+});
 
-        // Шаг 1: Регистрация аккаунта
-        console.log('📝 Шаг 1: Регистрация аккаунта в Let\'s Encrypt...');
-        const registerCommand = `docker exec -e REGRU_API_Username='${regru_username}' -e REGRU_API_Password='${regru_password}' acme_sh acme.sh --register-account -m ${email}`;
+// Получение статуса токена (есть или нет)
+app.get('/api/cf-token-status', requireAuth, (req, res) => {
+    res.json({
+        hasToken: !!userData.cf_token,
+        tokenPreview: userData.cf_token ? '***' + userData.cf_token.slice(-4) : null
+    });
+});
 
-        let registerResult;
-        try {
-            registerResult = await execPromise(registerCommand);
-            console.log('✅ Аккаунт зарегистрирован успешно');
-        } catch (error) {
-            const errorOutput = error.stdout + error.stderr;
-            console.error('❌ Ошибка регистрации аккаунта:', errorOutput);
+// Экспорт настроек в ZIP
+app.get('/api/export-settings', requireAuth, async (req, res) => {
+    try {
+        console.log('📦 Начало создания архива с настройками...');
 
-            // Проверяем, может аккаунт уже зарегистрирован
-            if (errorOutput.includes('already registered') || errorOutput.includes('Account already exists')) {
-                console.log('ℹ️  Аккаунт уже зарегистрирован, продолжаем...');
-            } else {
-                return res.status(500).json({
-                    error: 'Ошибка при регистрации аккаунта Let\'s Encrypt',
-                    details: errorOutput,
-                    step: 'registration'
-                });
+        // Устанавливаем заголовки для скачивания файла
+        const date = new Date().toISOString().split('T')[0];
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename=settings-backup-${date}.zip`);
+
+        // Создаем архиватор
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // максимальное сжатие
+        });
+
+        // Обработка ошибок
+        archive.on('error', (err) => {
+            console.error('❌ Ошибка при создании архива:', err);
+            res.status(500).json({ error: 'Ошибка при создании архива' });
+        });
+
+        // Передаем поток в response
+        archive.pipe(res);
+
+        // Добавляем файлы JSON
+        if (fs.existsSync(ITEMS_DATA_FILE)) {
+            archive.file(ITEMS_DATA_FILE, { name: 'items.json' });
+            console.log('✅ Добавлен items.json');
+        }
+
+        if (fs.existsSync(USER_DATA_FILE)) {
+            archive.file(USER_DATA_FILE, { name: 'user.json' });
+            console.log('✅ Добавлен user.json');
+        }
+
+        // Добавляем папку acme.sh, если она существует
+        if (fs.existsSync(ACME_DIR)) {
+            archive.directory(ACME_DIR, 'acme.sh');
+            console.log('✅ Добавлена папка acme.sh');
+        } else {
+            console.log('⚠️  Папка acme.sh не найдена');
+        }
+
+        // Завершаем архив
+        await archive.finalize();
+        console.log('✅ Архив успешно создан');
+
+    } catch (error) {
+        console.error('❌ Ошибка при экспорте настроек:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Ошибка при экспорте настроек' });
+        }
+    }
+});
+
+
+function clearDir(dirPath) {
+    if (!fs.existsSync(dirPath)) return;
+    for (const entry of fs.readdirSync(dirPath)) {
+        const entryPath = path.join(dirPath, entry);
+        const stat = fs.lstatSync(entryPath);
+        if (stat.isDirectory()) {
+            fs.rmSync(entryPath, { recursive: true, force: true });
+        } else {
+            fs.unlinkSync(entryPath);
+        }
+    }
+}
+
+// Импорт настроек из ZIP
+app.post('/api/import-settings', requireAuth, upload.single('settings'), async (req, res) => {
+    let tempDir = null;
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Файл не загружен' });
+        }
+
+        console.log('📥 Начало импорта настроек из:', req.file.path);
+
+        // Создаем временную директорию для распаковки
+        tempDir = path.join('/tmp', 'import_' + Date.now());
+        fs.mkdirSync(tempDir, { recursive: true });
+
+        // Распаковываем ZIP
+        const zip = new AdmZip(req.file.path);
+        zip.extractAllTo(tempDir, true);
+        console.log('✅ Архив распакован в:', tempDir);
+
+        // Восстанавливаем items.json
+        const itemsPath = path.join(tempDir, 'items.json');
+        if (fs.existsSync(itemsPath)) {
+            fs.copyFileSync(itemsPath, ITEMS_DATA_FILE);
+            console.log('✅ Восстановлен items.json');
+
+            // Перезагружаем данные в память
+            const newItemsData = loadItems();
+            items = newItemsData.items;
+            itemIdCounter = newItemsData.counter;
+        }
+
+        // Восстанавливаем user.json
+        const userPath = path.join(tempDir, 'user.json');
+        if (fs.existsSync(userPath)) {
+            fs.copyFileSync(userPath, USER_DATA_FILE);
+            console.log('✅ Восстановлен user.json');
+
+            // Перезагружаем данные пользователя
+            userData = loadUserData();
+        }
+
+        // Восстанавливаем папку acme.sh
+        const acmeTempPath = path.join(tempDir, 'acme.sh');
+
+        if (fs.existsSync(acmeTempPath)) {
+            if (fs.existsSync(ACME_DIR)) {
+                clearDir(ACME_DIR); // очищаем папку, не удаляя её
+                console.log('🧹 Очищено содержимое папки acme.sh');
+            }
+
+            copyFolderRecursiveSync(acmeTempPath, ACME_DIR);
+            console.log('✅ Восстановлена папка acme.sh');
+        }
+
+        // const acmeTempPath = path.join(tempDir, 'acme.sh');
+        // if (fs.existsSync(acmeTempPath)) {
+        //     // Удаляем старую папку acme.sh если она есть
+        //     if (fs.existsSync(ACME_DIR)) {
+        //         fs.rmSync(ACME_DIR, { recursive: true, force: true });
+        //         console.log('🗑️  Удалена старая папка acme.sh');
+        //     }
+        //
+        //     // Копируем новую папку
+        //     copyFolderRecursiveSync(acmeTempPath, ACME_DIR);
+        //     console.log('✅ Восстановлена папка acme.sh');
+        // }
+
+
+
+        // Пересоздаем все активные nginx конфиги
+        console.log('🔄 Пересоздание nginx конфигов...');
+        for (const item of items) {
+            if (item.active) {
+                createNginxConfig(item.domain, item.dest, item.ssl);
             }
         }
 
-        // Шаг 2: Получение сертификата
-        console.log('🔒 Шаг 2: Получение SSL-сертификата...');
-        const issueCommand = `docker exec -e REGRU_API_Username='${regru_username}' -e REGRU_API_Password='${regru_password}' acme_sh acme.sh --issue --dns dns_regru -d '*.${domain}'  --server letsencrypt`;
+        // Перезагружаем nginx
+        await applyNginxChanges();
+
+        // Удаляем временные файлы
+        fs.unlinkSync(req.file.path);
+        fs.rmSync(tempDir, { recursive: true, force: true });
+
+        console.log('✅ Импорт настроек завершен успешно');
+        res.json({
+            success: true,
+            message: 'Настройки успешно загружены и применены!'
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка при импорте настроек:', error);
+
+        // Очистка временных файлов в случае ошибки
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        if (tempDir && fs.existsSync(tempDir)) {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+
+        res.status(500).json({
+            error: 'Ошибка при импорте настроек',
+            details: error.message
+        });
+    }
+});
+
+// Получение списка существующих сертификатов
+app.get('/api/ssl-certificates', requireAuth, async (req, res) => {
+    try {
+        const acmeDir = '/acme.sh';
+
+        console.log('🔍 Поиск сертификатов в:', acmeDir);
+
+        if (!fs.existsSync(acmeDir)) {
+            console.log('❌ Папка не существует:', acmeDir);
+            return res.json({ certificates: [] });
+        }
+
+        const certificates = [];
+        const items = fs.readdirSync(acmeDir);
+        console.log('📂 Найдено элементов в папке:', items.length);
+
+        for (const item of items) {
+            const itemPath = path.join(acmeDir, item);
+            const stats = fs.statSync(itemPath);
+
+            if (!stats.isDirectory()) {
+                continue;
+            }
+
+            let domain = null;
+            let certDir = itemPath;
+
+            if (item.endsWith('_ecc') && item.startsWith('*.')) {
+                domain = item.replace('*.', '').replace('_ecc', '');
+            } else if (item.startsWith('*.')) {
+                domain = item.replace('*.', '');
+            } else if (item.endsWith('_ecc')) {
+                domain = item.replace('_ecc', '');
+            } else if (!item.includes('_') && item.includes('.')) {
+                domain = item;
+            }
+
+            if (!domain) {
+                continue;
+            }
+
+            try {
+                const certFiles = fs.readdirSync(certDir);
+                let certFile = null;
+
+                for (const file of certFiles) {
+                    if (file.endsWith('.cer') && !file.includes('ca.cer')) {
+                        certFile = path.join(certDir, file);
+                        break;
+                    }
+                }
+
+                if (!certFile || !fs.existsSync(certFile)) {
+                    continue;
+                }
+
+                const command = `docker exec acme_sh openssl x509 -enddate -noout -in "${certFile}"`;
+                const { stdout } = await execPromise(command);
+
+                const match = stdout.match(/notAfter=(.+)/);
+                if (match) {
+                    const expiryDate = new Date(match[1]);
+                    const now = new Date();
+                    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+                    certificates.push({
+                        domain: domain,
+                        expiryDate: expiryDate.toISOString(),
+                        daysLeft: daysLeft,
+                        path: certDir,
+                        status: daysLeft > 30 ? 'valid' : daysLeft > 0 ? 'expiring' : 'expired'
+                    });
+                }
+            } catch (error) {
+                console.error(`❌ Ошибка при обработке сертификата ${domain}:`, error.message);
+            }
+        }
+
+        certificates.sort((a, b) => a.daysLeft - b.daysLeft);
+        res.json({ certificates });
+
+    } catch (error) {
+        console.error('❌ Ошибка при получении списка сертификатов:', error);
+        res.status(500).json({
+            error: 'Ошибка при получении списка сертификатов',
+            details: error.message
+        });
+    }
+});
+
+// Получение SSL-сертификата через Let's Encrypt с CloudFlare DNS
+app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
+    const { domain } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({
+            error: 'CloudFlare токен не настроен',
+            details: 'Пожалуйста, сначала сохраните CloudFlare API токен в настройках'
+        });
+    }
+
+    try {
+        console.log('🔐 Начало процесса получения SSL-сертификата через CloudFlare...');
+        console.log(`   Домен: ${domain}`);
+
+        const issueCommand = `docker exec -e CF_Token='${userData.cf_token}' acme_sh acme.sh --issue --dns dns_cf -d *.${domain} --server letsencrypt`;
 
         let issueResult;
         let alreadyExists = false;
@@ -538,7 +845,6 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
         } catch (error) {
             const errorOutput = error.stdout + error.stderr;
 
-            // Проверяем, может сертификат уже существует и действует
             if (errorOutput.includes('Domains not changed') &&
                 errorOutput.includes('Skipping') &&
                 errorOutput.includes('Next renewal time is')) {
@@ -546,7 +852,6 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
                 alreadyExists = true;
                 issueResult = { stdout: errorOutput, stderr: '' };
 
-                // Извлекаем дату следующего обновления
                 const renewalMatch = errorOutput.match(/Next renewal time is: ([^\n]+)/);
                 if (renewalMatch) {
                     renewalDate = renewalMatch[1];
@@ -561,7 +866,6 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
             }
         }
 
-        // Определяем путь к сертификатам
         const certPath = `/acme.sh/*.${domain}_ecc`;
         const certFiles = {
             fullchain: `${certPath}/fullchain.cer`,
@@ -605,4 +909,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📁 Nginx конфиги: ${NGINX_CONFIG_DIR}`);
     console.log(`📄 Шаблон nginx: ${NGINX_TEMPLATE_PATH}`);
     console.log(`🔐 Шаблон nginx SSL: ${NGINX_SSL_TEMPLATE_PATH}`);
+    console.log(`☁️  CloudFlare токен: ${userData.cf_token ? 'настроен' : 'не настроен'}`);
 });
