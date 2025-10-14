@@ -2,7 +2,6 @@
 
 # ============================================
 # Скрипт автоматического создания LXC-контейнера в Proxmox
-# с включённым SSH и входом по паролю
 # ============================================
 
 # --- НАСТРОЙКИ КОНТЕЙНЕРА ---
@@ -82,26 +81,32 @@ echo "Запуск контейнера..."
 pct start $CTID
 sleep 15
 
-# --- УСТАНОВКА ПО + SSH ENABLE ---
+# --- УСТАНОВКА ПО ---
 echo "Установка и настройка..."
 
 pct exec $CTID -- bash -c "
     export DEBIAN_FRONTEND=noninteractive
     apt update && apt upgrade -y
-    apt install -y curl wget git vim htop net-tools sudo unzip openssh-server docker docker-compose
+    apt install -y curl wget git vim htop net-tools sudo unzip openssh-server
 
-    # --- SSH ENABLE ---
+    # Настройка SSH
+    echo '=== Настройка SSH ==='
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
     systemctl enable ssh
-    systemctl start ssh
-    sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
     systemctl restart ssh
 
-    # --- Docker ---
+    # Docker
+    curl -fsSL https://get.docker.com | sh
     systemctl enable docker
     systemctl start docker
 
-    # --- Скачивание и установка reverse_proxy ---
+    # Docker Compose
+    apt install -y docker-compose
+
+    # Скачивание и установка reverse_proxy
     echo '=== Скачивание reverse_proxy ==='
     cd /var
     wget https://github.com/codeitnos/reverse_proxy/archive/refs/tags/latest.zip -O reverse_proxy.zip
@@ -115,12 +120,16 @@ pct exec $CTID -- bash -c "
     docker compose -f docker-compose.yml up -d
 
     cd /root
+
     apt autoremove -y
     apt clean
+
     echo '=== Установка завершена ==='
 "
 
+
 [ $? -eq 0 ] && {
+    # Получаем IP-адрес контейнера с несколькими попытками
     echo "Получение IP-адреса..."
     CONTAINER_IP=""
     for i in {1..5}; do
@@ -136,10 +145,11 @@ pct exec $CTID -- bash -c "
     echo "ID: $CTID"
     echo "Hostname: $HOSTNAME"
     echo "IP: ${CONTAINER_IP:-DHCP (определяется...)}"
-    echo "Сайт: http://${CONTAINER_IP:-IP_не_определён}:8881"
+    echo "Веб-интерфейс: http://${CONTAINER_IP:-IP}:8881"
     echo "Логин: admin"
     echo "Пароль: password123"
-    echo "SSH: root@${CONTAINER_IP:-неизвестно} (пароль: $PASSWORD)"
+    echo "SSH: ssh root@${CONTAINER_IP:-IP}"
+    echo "Пароль SSH: $PASSWORD"
     echo "Подключение: pct enter $CTID"
     echo "============================================"
 } || {
