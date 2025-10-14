@@ -1560,7 +1560,7 @@
             return `
         <div class="item-card ${item.active ? '' : 'inactive'}">
           <div class="item-content">
-            <p><strong>Источник:</strong> ${escapeHtml(item.domain)} <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
+            <p><strong>Источник:</strong> <a href="https://${escapeHtml(item.domain)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.domain)}</a> <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
             ${dnsInfoHtml}
             <p><strong>Направление:</strong> ${escapeHtml(item.dest)}</p>
             <p style="display: none;"><strong>Пункт 3:</strong> ${escapeHtml(item.item3)}</p>
