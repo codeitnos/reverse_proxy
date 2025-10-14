@@ -32,6 +32,9 @@
             padding-bottom: 20px;
             border-bottom: 2px solid #667eea;
         }
+        .header-menu-wrapper {
+            position: relative;
+        }
         h1 {
             color: #667eea;
             font-size: 28px;
@@ -631,8 +634,8 @@
         .dropdown-menu {
             display: none;
             position: absolute;
-            top: 70px;
-            right: 20px;
+            top: calc(100% + 5px);
+            right: 0;
             background: white;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
@@ -704,8 +707,7 @@
                 max-width: 95%;
             }
             .dropdown-menu {
-                right: 10px;
-                top: 60px;
+                right: 0;
                 min-width: 220px;
             }
             .header {
@@ -781,39 +783,41 @@
 <div class="container">
     <div class="header">
         <h1>📝 Управление записями</h1>
-        <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
+        <div class="header-menu-wrapper">
+            <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
+
+            <!-- Выпадающее меню -->
+            <div class="dropdown-menu" id="dropdownMenu">
+                <div class="dropdown-menu-item" onclick="syncAllDns(); closeMenu();">
+                    🔄 Синхронизация DNS
+                </div>
+                <div class="dropdown-menu-item" onclick="openAutoSyncModal(); closeMenu();">
+                    ⏱️ Автосинхронизация DNS
+                </div>
+                <div class="dropdown-menu-item" onclick="exportSettings(); closeMenu();">
+                    📥 Выгрузить настройки
+                </div>
+                <div class="dropdown-menu-item" onclick="openImportModal(); closeMenu();">
+                    📤 Загрузить настройки
+                </div>
+                <div class="dropdown-menu-item" onclick="openCfTokenModal(); closeMenu();">
+                    ☁️ CloudFlare токен
+                </div>
+                <div class="dropdown-menu-item" onclick="openSslModal(); closeMenu();">
+                    🔐 Получить сертификат
+                </div>
+                <div class="dropdown-menu-item" onclick="openChangePasswordModal(); closeMenu();">
+                    🔒 Сменить пароль
+                </div>
+                <a href="/logout" class="dropdown-menu-item danger">
+                    🚪 Выход
+                </a>
+            </div>
+        </div>
     </div>
 
     <!-- Overlay для закрытия меню при клике вне его -->
     <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
-
-    <!-- Выпадающее меню -->
-    <div class="dropdown-menu" id="dropdownMenu">
-        <div class="dropdown-menu-item" onclick="syncAllDns(); closeMenu();">
-            🔄 Синхронизация DNS
-        </div>
-        <div class="dropdown-menu-item" onclick="openAutoSyncModal(); closeMenu();">
-            ⏱️ Автосинхронизация DNS
-        </div>
-        <div class="dropdown-menu-item" onclick="exportSettings(); closeMenu();">
-            📥 Выгрузить настройки
-        </div>
-        <div class="dropdown-menu-item" onclick="openImportModal(); closeMenu();">
-            📤 Загрузить настройки
-        </div>
-        <div class="dropdown-menu-item" onclick="openCfTokenModal(); closeMenu();">
-            ☁️ CloudFlare токен
-        </div>
-        <div class="dropdown-menu-item" onclick="openSslModal(); closeMenu();">
-            🔐 Получить сертификат
-        </div>
-        <div class="dropdown-menu-item" onclick="openChangePasswordModal(); closeMenu();">
-            🔒 Сменить пароль
-        </div>
-        <a href="/logout" class="dropdown-menu-item danger">
-            🚪 Выход
-        </a>
-    </div>
 
     <div class="section-header">
         <h2>📋 Список записей</h2>
