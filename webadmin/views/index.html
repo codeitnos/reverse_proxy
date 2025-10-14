@@ -158,6 +158,69 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            position: relative;
+        }
+        .item-menu-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            transition: all 0.3s;
+            border-radius: 5px;
+            line-height: 1;
+            color: #667eea;
+        }
+        .item-menu-btn:hover {
+            background: #f8f9fa;
+            transform: scale(1.1);
+        }
+        .item-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 100;
+            min-width: 180px;
+            overflow: hidden;
+        }
+        .item-dropdown-menu.show {
+            display: block;
+            animation: itemMenuSlide 0.2s ease-out;
+        }
+        @keyframes itemMenuSlide {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .item-dropdown-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #495057;
+            font-size: 14px;
+        }
+        .item-dropdown-item:last-child {
+            border-bottom: none;
+        }
+        .item-dropdown-item:hover {
+            background: #f8f9fa;
+        }
+        .item-dropdown-item.danger:hover {
+            background: #f8d7da;
+            color: #dc3545;
         }
         .icon-btn {
             background: none;
@@ -474,8 +537,163 @@
             color: #856404;
         }
 
+        .dns-info {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .dns-ip {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .dns-ip.mismatch {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .dns-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .dns-btn {
+            background: none;
+            border: 1px solid #ced4da;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 2px 8px;
+            transition: all 0.3s;
+            border-radius: 3px;
+            color: #495057;
+        }
+        .dns-btn:hover {
+            background: #f8f9fa;
+        }
+        .dns-btn.create {
+            border-color: #28a745;
+            color: #28a745;
+        }
+        .dns-btn.create:hover {
+            background: #28a745;
+            color: white;
+        }
+        .dns-btn.delete {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        .dns-btn.delete:hover {
+            background: #dc3545;
+            color: white;
+        }
+        .dns-btn.update {
+            border-color: #17a2b8;
+            color: #17a2b8;
+        }
+        .dns-btn.update:hover {
+            background: #17a2b8;
+            color: white;
+        }
+        .dns-status {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .dns-status.exists {
+            background: #d4edda;
+            color: #155724;
+        }
+        .dns-status.not-exists {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Гамбургер меню */
+        .hamburger-btn {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            color: #667eea;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s;
+        }
+        .hamburger-btn:hover {
+            transform: scale(1.1);
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            z-index: 1000;
+            min-width: 250px;
+            overflow: hidden;
+        }
+        .dropdown-menu.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .dropdown-menu-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #495057;
+            text-decoration: none;
+        }
+        .dropdown-menu-item:last-child {
+            border-bottom: none;
+        }
+        .dropdown-menu-item:hover {
+            background: #f8f9fa;
+        }
+        .dropdown-menu-item.danger:hover {
+            background: #f8d7da;
+            color: #dc3545;
+        }
+        .menu-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 999;
+        }
+        .menu-overlay.show {
+            display: block;
+        }
+
         /* Адаптивные стили для мобильных устройств */
         @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
             .modal-content {
                 margin: 2% auto;
                 padding: 20px;
@@ -485,8 +703,67 @@
             .modal-content.ssl-modal {
                 max-width: 95%;
             }
-            .header-buttons {
+            .dropdown-menu {
+                right: 10px;
+                top: 60px;
+                min-width: 220px;
+            }
+            .header {
+                margin-bottom: 20px;
+                padding-bottom: 15px;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .hamburger-btn {
+                font-size: 28px;
+            }
+            .section-header {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+            .section-header h2 {
+                font-size: 18px;
+            }
+            .item-card {
+                padding: 12px;
+                flex-direction: column;
+                gap: 15px;
+            }
+            .item-content p {
+                font-size: 14px;
+                word-break: break-word;
+            }
+            .item-content strong {
+                display: block;
+                margin-bottom: 3px;
+            }
+            .dns-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .dns-actions {
                 flex-wrap: wrap;
+                width: 100%;
+            }
+            .dns-btn {
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            .item-status {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .item-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+            .btn {
+                font-size: 13px;
+                padding: 8px 15px;
             }
             .cert-domain {
                 font-size: 12px;
@@ -504,19 +781,40 @@
 <div class="container">
     <div class="header">
         <h1>📝 Управление записями</h1>
-        <div class="header-buttons">
-            <button class="btn btn-warning" onclick="openCfTokenModal()">☁️ CloudFlare токен</button>
-            <button class="btn btn-info" onclick="openSslModal()">🔐 Получить сертификат</button>
-            <button class="btn btn-secondary" onclick="openChangePasswordModal()">🔒 Сменить пароль</button>
-            <a href="/logout" class="btn btn-danger">🚪 Выход</a>
+        <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
+    </div>
+
+    <!-- Overlay для закрытия меню при клике вне его -->
+    <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
+
+    <!-- Выпадающее меню -->
+    <div class="dropdown-menu" id="dropdownMenu">
+        <div class="dropdown-menu-item" onclick="syncAllDns(); closeMenu();">
+            🔄 Синхронизация DNS
         </div>
+        <div class="dropdown-menu-item" onclick="exportSettings(); closeMenu();">
+            📥 Выгрузить настройки
+        </div>
+        <div class="dropdown-menu-item" onclick="openImportModal(); closeMenu();">
+            📤 Загрузить настройки
+        </div>
+        <div class="dropdown-menu-item" onclick="openCfTokenModal(); closeMenu();">
+            ☁️ CloudFlare токен
+        </div>
+        <div class="dropdown-menu-item" onclick="openSslModal(); closeMenu();">
+            🔐 Получить сертификат
+        </div>
+        <div class="dropdown-menu-item" onclick="openChangePasswordModal(); closeMenu();">
+            🔒 Сменить пароль
+        </div>
+        <a href="/logout" class="dropdown-menu-item danger">
+            🚪 Выход
+        </a>
     </div>
 
     <div class="section-header">
         <h2>📋 Список записей</h2>
         <div class="section-actions">
-            <button class="btn btn-info btn-icon" onclick="exportSettings()" title="Выгрузить все настройки">📥</button>
-            <button class="btn btn-warning btn-icon" onclick="openImportModal()" title="Загрузить все настройки">📤</button>
             <button class="btn btn-success" onclick="openAddModal()">➕ Добавить запись</button>
         </div>
     </div>
@@ -747,6 +1045,68 @@
 </div>
 
 <script>
+    // Функции для гамбургер-меню
+    function toggleMenu() {
+        const menu = document.getElementById('dropdownMenu');
+        const overlay = document.getElementById('menuOverlay');
+        const isShown = menu.classList.contains('show');
+
+        if (isShown) {
+            closeMenu();
+        } else {
+            menu.classList.add('show');
+            overlay.classList.add('show');
+        }
+    }
+
+    function closeMenu() {
+        const menu = document.getElementById('dropdownMenu');
+        const overlay = document.getElementById('menuOverlay');
+        menu.classList.remove('show');
+        overlay.classList.remove('show');
+    }
+
+    // Закрытие меню по клавише Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeMenu();
+            closeAllItemMenus();
+        }
+    });
+
+    // Функции для гамбургер-меню в карточках записей
+    function toggleItemMenu(itemId, event) {
+        event.stopPropagation();
+        const menu = document.getElementById('itemMenu' + itemId);
+        const isShown = menu.classList.contains('show');
+
+        // Закрываем все другие меню
+        closeAllItemMenus();
+
+        if (!isShown) {
+            menu.classList.add('show');
+        }
+    }
+
+    function closeItemMenu(itemId) {
+        const menu = document.getElementById('itemMenu' + itemId);
+        if (menu) {
+            menu.classList.remove('show');
+        }
+    }
+
+    function closeAllItemMenus() {
+        const menus = document.querySelectorAll('.item-dropdown-menu');
+        menus.forEach(menu => menu.classList.remove('show'));
+    }
+
+    // Закрытие меню при клике вне его
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.item-actions')) {
+            closeAllItemMenus();
+        }
+    });
+
     loadItems();
     checkCfTokenStatus();
 
@@ -1098,10 +1458,58 @@
             return;
         }
 
-        itemsList.innerHTML = items.map(item => `
+        // Получаем текущий IP сервера
+        let serverIp = null;
+        try {
+            const ipResponse = await fetch('/api/server-external-ip');
+            if (ipResponse.ok) {
+                const ipData = await ipResponse.json();
+                serverIp = ipData.ip;
+            }
+        } catch (error) {
+            console.error('Ошибка получения IP сервера:', error);
+        }
+
+        itemsList.innerHTML = items.map(item => {
+            let dnsInfoHtml = '';
+
+            // Используем кешированные данные
+            const hasCachedDns = item.cf_ip || item.cf_record_id;
+            const ipMismatch = serverIp && item.cf_ip && serverIp !== item.cf_ip;
+            const ipClass = ipMismatch ? 'mismatch' : '';
+
+            if (hasCachedDns) {
+                dnsInfoHtml = `
+                    <div class="dns-info">
+                        <span class="dns-status exists">☁️ DNS настроен</span>
+                        <span class="dns-ip ${ipClass}">IP: ${item.cf_ip || 'N/A'}</span>
+                        ${ipMismatch ? '<span style="color: #856404;">⚠️ IP не совпадает с сервером (' + serverIp + ')</span>' : ''}
+                        <div class="dns-actions">
+                            <button class="dns-btn" onclick="syncDns(${item.id})" title="Синхронизировать DNS">🔄 Sync</button>
+                            <button class="dns-btn update" onclick="updateDns(${item.id}, '${escapeHtml(item.domain)}')" title="Обновить IP">📝 Обновить IP</button>
+                            <button class="dns-btn delete" onclick="deleteDns(${item.id}, '${escapeHtml(item.domain)}')" title="Удалить DNS запись">🗑️ Удалить DNS</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                dnsInfoHtml = `
+                    <div class="dns-info">
+                        <span class="dns-status not-exists">❓ DNS не проверен</span>
+                        <div class="dns-actions">
+                            <button class="dns-btn" onclick="syncDns(${item.id})" title="Проверить DNS">🔄 Проверить</button>
+                            <button class="dns-btn create" onclick="createDns(${item.id}, '${escapeHtml(item.domain)}')" title="Создать DNS запись">➕ Создать DNS</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const lastSync = item.cf_last_sync ? new Date(item.cf_last_sync).toLocaleString('ru-RU') : 'Никогда';
+
+            return `
         <div class="item-card ${item.active ? '' : 'inactive'}">
           <div class="item-content">
-            <p><strong>Источник:</strong> ${escapeHtml(item.domain)}</p>
+            <p><strong>Источник:</strong> ${escapeHtml(item.domain)} <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
+            ${dnsInfoHtml}
             <p><strong>Направление:</strong> ${escapeHtml(item.dest)}</p>
             <p style="display: none;"><strong>Пункт 3:</strong> ${escapeHtml(item.item3)}</p>
             <div class="item-status">
@@ -1122,11 +1530,165 @@
             </div>
           </div>
           <div class="item-actions">
-            <button class="icon-btn edit" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active})" title="Редактировать">✏️</button>
-            <button class="icon-btn delete" onclick="deleteItem(${item.id})" title="Удалить">🗑️</button>
+            <button class="item-menu-btn" onclick="toggleItemMenu(${item.id}, event)">⋮</button>
+            <div class="item-dropdown-menu" id="itemMenu${item.id}">
+              <div class="item-dropdown-item" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active}); closeItemMenu(${item.id});">
+                ✏️ Редактировать
+              </div>
+              <div class="item-dropdown-item danger" onclick="deleteItem(${item.id}); closeItemMenu(${item.id});">
+                🗑️ Удалить
+              </div>
+            </div>
           </div>
         </div>
-      `).join('');
+      `;
+        }).join('');
+    }
+
+    // Синхронизация DNS для одного item
+    async function syncDns(itemId) {
+        showLoading('Синхронизация DNS...');
+
+        try {
+            const response = await fetch(`/api/items/${itemId}/sync-dns`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.exists) {
+                    alert(`✅ DNS запись найдена\nIP: ${result.record.content}\n${result.ipMatch ? '✅ IP совпадает с сервером' : '⚠️ IP не совпадает с сервером (' + result.serverIp + ')'}`);
+                } else {
+                    alert('ℹ️ DNS запись не найдена в CloudFlare');
+                }
+                loadItems();
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка синхронизации DNS'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+    // Синхронизация DNS для всех items
+    async function syncAllDns() {
+        if (!confirm('Синхронизировать DNS информацию для всех записей?')) return;
+
+        showLoading('Синхронизация DNS для всех записей...');
+
+        try {
+            const response = await fetch('/api/sync-all-dns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                const successful = result.results.filter(r => r.success).length;
+                const failed = result.results.filter(r => !r.success).length;
+
+                alert(`✅ Синхронизация завершена!\n\nУспешно: ${successful}\nОшибок: ${failed}\nIP сервера: ${result.serverIp}`);
+                loadItems();
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка синхронизации DNS'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+    // Функции для работы с CloudFlare DNS
+    async function createDns(itemId, domain) {
+        if (!confirm(`Создать DNS запись для домена ${domain}?`)) return;
+
+        showLoading('Создание DNS записи...');
+
+        try {
+            const response = await fetch('/api/cloudflare/create-dns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, itemId })
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(`✅ ${result.message}\nIP: ${result.record.content}`);
+                loadItems();
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка создания DNS записи'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+    async function updateDns(itemId, domain) {
+        if (!confirm(`Обновить IP адрес для домена ${domain}?`)) return;
+
+        showLoading('Обновление DNS записи...');
+
+        try {
+            const response = await fetch('/api/cloudflare/update-dns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, itemId })
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(`✅ ${result.message}\nНовый IP: ${result.record.content}`);
+                loadItems();
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка обновления DNS записи'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+    async function deleteDns(itemId, domain) {
+        if (!confirm(`⚠️ ВНИМАНИЕ!\n\nВы уверены, что хотите удалить DNS запись для домена ${domain}?\n\nЭто действие нельзя отменить!`)) return;
+
+        showLoading('Удаление DNS записи...');
+
+        try {
+            const response = await fetch('/api/cloudflare/delete-dns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, itemId })
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                alert('✅ ' + result.message);
+                loadItems();
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка удаления DNS записи'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
     }
 
     function escapeHtml(text) {

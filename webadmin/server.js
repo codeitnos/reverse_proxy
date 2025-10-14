@@ -9,6 +9,7 @@ const util = require('util');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const multer = require('multer');
+const https = require('https');
 const execPromise = util.promisify(exec);
 
 const app = express();
@@ -42,6 +43,153 @@ function getRootDomain(fullDomain) {
         return parts.slice(-2).join('.');
     }
     return fullDomain;
+}
+
+// Функция для выполнения HTTPS запросов к CloudFlare API
+function cloudflareRequest(method, path, token, data = null) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            hostname: 'api.cloudflare.com',
+            port: 443,
+            path: path,
+            method: method,
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        };
+
+        if (data && (method === 'POST' || method === 'PUT')) {
+            const postData = JSON.stringify(data);
+            options.headers['Content-Length'] = Buffer.byteLength(postData);
+        }
+
+        const req = https.request(options, (res) => {
+            let responseData = '';
+
+            res.on('data', (chunk) => {
+                responseData += chunk;
+            });
+
+            res.on('end', () => {
+                try {
+                    const parsedData = JSON.parse(responseData);
+                    resolve(parsedData);
+                } catch (error) {
+                    reject(new Error('Failed to parse response: ' + responseData));
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        if (data && (method === 'POST' || method === 'PUT')) {
+            req.write(JSON.stringify(data));
+        }
+
+        req.end();
+    });
+}
+
+// Функция для получения внешнего IP сервера
+async function getServerExternalIp() {
+    return new Promise((resolve, reject) => {
+        https.get('https://ifconfig.me/ip', (res) => {
+            let data = '';
+
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+
+            res.on('end', () => {
+                resolve(data.trim());
+            });
+        }).on('error', (error) => {
+            console.error('❌ Ошибка получения внешнего IP:', error);
+            reject(error);
+        });
+    });
+}
+
+// Функция для получения Zone ID из CloudFlare
+async function getCloudFlareZoneId(domain, token) {
+    try {
+        const response = await cloudflareRequest('GET', `/client/v4/zones?name=${domain}`, token);
+
+        if (response.success && response.result && response.result.length > 0) {
+            return response.result[0].id;
+        }
+        return null;
+    } catch (error) {
+        console.error('❌ Ошибка получения Zone ID:', error);
+        return null;
+    }
+}
+
+// Функция для получения A-записи из CloudFlare
+async function getCloudFlareARecord(zoneId, recordName, token) {
+    try {
+        const response = await cloudflareRequest('GET', `/client/v4/zones/${zoneId}/dns_records?type=A&name=${recordName}`, token);
+
+        if (response.success && response.result && response.result.length > 0) {
+            return response.result[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('❌ Ошибка получения A-записи:', error);
+        return null;
+    }
+}
+
+// Функция для создания A-записи в CloudFlare
+async function createCloudFlareARecord(zoneId, subdomain, ip, token) {
+    try {
+        const data = {
+            type: 'A',
+            name: subdomain,
+            content: ip,
+            ttl: 3600,
+            proxied: false
+        };
+
+        const response = await cloudflareRequest('POST', `/client/v4/zones/${zoneId}/dns_records`, token, data);
+        return response;
+    } catch (error) {
+        console.error('❌ Ошибка создания A-записи:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Функция для обновления A-записи в CloudFlare
+async function updateCloudFlareARecord(zoneId, recordId, subdomain, ip, token) {
+    try {
+        const data = {
+            type: 'A',
+            name: subdomain,
+            content: ip,
+            ttl: 3600,
+            proxied: false
+        };
+
+        const response = await cloudflareRequest('PUT', `/client/v4/zones/${zoneId}/dns_records/${recordId}`, token, data);
+        return response;
+    } catch (error) {
+        console.error('❌ Ошибка обновления A-записи:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Функция для удаления A-записи из CloudFlare
+async function deleteCloudFlareARecord(zoneId, recordId, token) {
+    try {
+        const response = await cloudflareRequest('DELETE', `/client/v4/zones/${zoneId}/dns_records/${recordId}`, token);
+        return response;
+    } catch (error) {
+        console.error('❌ Ошибка удаления A-записи:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 // Функция для загрузки данных пользователя
@@ -883,6 +1031,382 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
             error: 'Непредвиденная ошибка при получении сертификата',
             details: error.message
         });
+    }
+});
+
+// Получение внешнего IP сервера
+app.get('/api/server-external-ip', requireAuth, async (req, res) => {
+    try {
+        const ip = await getServerExternalIp();
+        if (ip) {
+            res.json({ success: true, ip });
+        } else {
+            res.status(500).json({ error: 'Не удалось получить внешний IP' });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка получения внешнего IP:', error);
+        res.status(500).json({ error: 'Ошибка получения внешнего IP', details: error.message });
+    }
+});
+
+// Синхронизация DNS информации для конкретного item
+app.post('/api/items/:id/sync-dns', requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    const itemIndex = items.findIndex(item => item.id === id);
+
+    if (itemIndex === -1) {
+        return res.status(404).json({ error: 'Запись не найдена' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const item = items[itemIndex];
+        const rootDomain = getRootDomain(item.domain);
+        const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+        if (!zoneId) {
+            return res.status(404).json({ error: 'Домен не найден в CloudFlare' });
+        }
+
+        const record = await getCloudFlareARecord(zoneId, item.domain, userData.cf_token);
+        const serverIp = await getServerExternalIp();
+
+        // Обновляем кешированные данные
+        items[itemIndex].cf_ip = record ? record.content : null;
+        items[itemIndex].cf_record_id = record ? record.id : null;
+        items[itemIndex].cf_zone_id = zoneId;
+        items[itemIndex].cf_last_sync = new Date().toISOString();
+        items[itemIndex].server_ip = serverIp;
+
+        saveItems();
+
+        res.json({
+            success: true,
+            exists: !!record,
+            record: record ? {
+                id: record.id,
+                name: record.name,
+                content: record.content,
+                ttl: record.ttl,
+                proxied: record.proxied
+            } : null,
+            serverIp,
+            ipMatch: record ? record.content === serverIp : null,
+            zoneId
+        });
+    } catch (error) {
+        console.error('❌ Ошибка синхронизации DNS:', error);
+        res.status(500).json({ error: 'Ошибка синхронизации DNS', details: error.message });
+    }
+});
+
+// Синхронизация DNS информации для всех items
+app.post('/api/sync-all-dns', requireAuth, async (req, res) => {
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const serverIp = await getServerExternalIp();
+        const results = [];
+
+        for (let i = 0; i < items.length; i++) {
+            try {
+                const item = items[i];
+                const rootDomain = getRootDomain(item.domain);
+                const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+                if (zoneId) {
+                    const record = await getCloudFlareARecord(zoneId, item.domain, userData.cf_token);
+
+                    items[i].cf_ip = record ? record.content : null;
+                    items[i].cf_record_id = record ? record.id : null;
+                    items[i].cf_zone_id = zoneId;
+                    items[i].cf_last_sync = new Date().toISOString();
+                    items[i].server_ip = serverIp;
+
+                    results.push({
+                        id: item.id,
+                        domain: item.domain,
+                        success: true,
+                        exists: !!record
+                    });
+                } else {
+                    results.push({
+                        id: item.id,
+                        domain: item.domain,
+                        success: false,
+                        error: 'Домен не найден в CloudFlare'
+                    });
+                }
+            } catch (error) {
+                console.error(`❌ Ошибка синхронизации DNS для ${items[i].domain}:`, error);
+                results.push({
+                    id: items[i].id,
+                    domain: items[i].domain,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        saveItems();
+
+        res.json({
+            success: true,
+            serverIp,
+            results
+        });
+    } catch (error) {
+        console.error('❌ Ошибка синхронизации всех DNS:', error);
+        res.status(500).json({ error: 'Ошибка синхронизации DNS', details: error.message });
+    }
+});
+
+// Получение информации о DNS записи из CloudFlare
+app.post('/api/cloudflare/get-dns-info', requireAuth, async (req, res) => {
+    const { domain } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const rootDomain = getRootDomain(domain);
+        const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+        if (!zoneId) {
+            return res.status(404).json({ error: 'Домен не найден в CloudFlare' });
+        }
+
+        const record = await getCloudFlareARecord(zoneId, domain, userData.cf_token);
+        const serverIp = await getServerExternalIp();
+
+        res.json({
+            success: true,
+            exists: !!record,
+            record: record ? {
+                id: record.id,
+                name: record.name,
+                content: record.content,
+                ttl: record.ttl,
+                proxied: record.proxied
+            } : null,
+            serverIp,
+            ipMatch: record ? record.content === serverIp : null,
+            zoneId
+        });
+    } catch (error) {
+        console.error('❌ Ошибка получения DNS информации:', error);
+        res.status(500).json({ error: 'Ошибка получения DNS информации', details: error.message });
+    }
+});
+
+// Создание DNS записи в CloudFlare
+app.post('/api/cloudflare/create-dns', requireAuth, async (req, res) => {
+    const { domain, itemId } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const rootDomain = getRootDomain(domain);
+        const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+        if (!zoneId) {
+            return res.status(404).json({ error: 'Домен не найден в CloudFlare' });
+        }
+
+        // Проверяем существование записи
+        const existingRecord = await getCloudFlareARecord(zoneId, domain, userData.cf_token);
+        if (existingRecord) {
+            return res.status(400).json({ error: 'DNS запись уже существует' });
+        }
+
+        const serverIp = await getServerExternalIp();
+        if (!serverIp) {
+            return res.status(500).json({ error: 'Не удалось получить внешний IP сервера' });
+        }
+
+        const response = await createCloudFlareARecord(zoneId, domain, serverIp, userData.cf_token);
+
+        if (response.success) {
+            // Обновляем кеш в items
+            if (itemId) {
+                const itemIndex = items.findIndex(item => item.id === parseInt(itemId));
+                if (itemIndex !== -1) {
+                    items[itemIndex].cf_ip = response.result.content;
+                    items[itemIndex].cf_record_id = response.result.id;
+                    items[itemIndex].cf_zone_id = zoneId;
+                    items[itemIndex].cf_last_sync = new Date().toISOString();
+                    items[itemIndex].server_ip = serverIp;
+                    saveItems();
+                }
+            }
+
+            res.json({
+                success: true,
+                message: 'DNS запись успешно создана',
+                record: {
+                    id: response.result.id,
+                    name: response.result.name,
+                    content: response.result.content,
+                    ttl: response.result.ttl,
+                    proxied: response.result.proxied
+                }
+            });
+        } else {
+            res.status(500).json({
+                error: 'Ошибка создания DNS записи',
+                details: response.errors ? JSON.stringify(response.errors) : 'Неизвестная ошибка'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка создания DNS записи:', error);
+        res.status(500).json({ error: 'Ошибка создания DNS записи', details: error.message });
+    }
+});
+
+// Обновление DNS записи в CloudFlare
+app.post('/api/cloudflare/update-dns', requireAuth, async (req, res) => {
+    const { domain, itemId } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const rootDomain = getRootDomain(domain);
+        const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+        if (!zoneId) {
+            return res.status(404).json({ error: 'Домен не найден в CloudFlare' });
+        }
+
+        const existingRecord = await getCloudFlareARecord(zoneId, domain, userData.cf_token);
+        if (!existingRecord) {
+            return res.status(404).json({ error: 'DNS запись не найдена' });
+        }
+
+        const serverIp = await getServerExternalIp();
+        if (!serverIp) {
+            return res.status(500).json({ error: 'Не удалось получить внешний IP сервера' });
+        }
+
+        const response = await updateCloudFlareARecord(
+            zoneId,
+            existingRecord.id,
+            domain,
+            serverIp,
+            userData.cf_token
+        );
+
+        if (response.success) {
+            // Обновляем кеш в items
+            if (itemId) {
+                const itemIndex = items.findIndex(item => item.id === parseInt(itemId));
+                if (itemIndex !== -1) {
+                    items[itemIndex].cf_ip = response.result.content;
+                    items[itemIndex].cf_record_id = response.result.id;
+                    items[itemIndex].cf_zone_id = zoneId;
+                    items[itemIndex].cf_last_sync = new Date().toISOString();
+                    items[itemIndex].server_ip = serverIp;
+                    saveItems();
+                }
+            }
+
+            res.json({
+                success: true,
+                message: 'DNS запись успешно обновлена',
+                record: {
+                    id: response.result.id,
+                    name: response.result.name,
+                    content: response.result.content,
+                    ttl: response.result.ttl,
+                    proxied: response.result.proxied
+                }
+            });
+        } else {
+            res.status(500).json({
+                error: 'Ошибка обновления DNS записи',
+                details: response.errors ? JSON.stringify(response.errors) : 'Неизвестная ошибка'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка обновления DNS записи:', error);
+        res.status(500).json({ error: 'Ошибка обновления DNS записи', details: error.message });
+    }
+});
+
+// Удаление DNS записи из CloudFlare
+app.post('/api/cloudflare/delete-dns', requireAuth, async (req, res) => {
+    const { domain, itemId } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const rootDomain = getRootDomain(domain);
+        const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+        if (!zoneId) {
+            return res.status(404).json({ error: 'Домен не найден в CloudFlare' });
+        }
+
+        const existingRecord = await getCloudFlareARecord(zoneId, domain, userData.cf_token);
+        if (!existingRecord) {
+            return res.status(404).json({ error: 'DNS запись не найдена' });
+        }
+
+        const response = await deleteCloudFlareARecord(zoneId, existingRecord.id, userData.cf_token);
+
+        if (response.success) {
+            // Очищаем кеш в items
+            if (itemId) {
+                const itemIndex = items.findIndex(item => item.id === parseInt(itemId));
+                if (itemIndex !== -1) {
+                    items[itemIndex].cf_ip = null;
+                    items[itemIndex].cf_record_id = null;
+                    items[itemIndex].cf_zone_id = zoneId;
+                    items[itemIndex].cf_last_sync = new Date().toISOString();
+                    saveItems();
+                }
+            }
+
+            res.json({
+                success: true,
+                message: 'DNS запись успешно удалена'
+            });
+        } else {
+            res.status(500).json({
+                error: 'Ошибка удаления DNS записи',
+                details: response.errors ? JSON.stringify(response.errors) : 'Неизвестная ошибка'
+            });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка удаления DNS записи:', error);
+        res.status(500).json({ error: 'Ошибка удаления DNS записи', details: error.message });
     }
 });
 
