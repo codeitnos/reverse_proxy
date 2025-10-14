@@ -670,18 +670,6 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
             console.log('✅ Восстановлена папка acme.sh');
         }
 
-        // const acmeTempPath = path.join(tempDir, 'acme.sh');
-        // if (fs.existsSync(acmeTempPath)) {
-        //     // Удаляем старую папку acme.sh если она есть
-        //     if (fs.existsSync(ACME_DIR)) {
-        //         fs.rmSync(ACME_DIR, { recursive: true, force: true });
-        //         console.log('🗑️  Удалена старая папка acme.sh');
-        //     }
-        //
-        //     // Копируем новую папку
-        //     copyFolderRecursiveSync(acmeTempPath, ACME_DIR);
-        //     console.log('✅ Восстановлена папка acme.sh');
-        // }
 
 
 
