@@ -93,7 +93,7 @@ docker compose up -d
 
 if [ $? -ne 0 ]; then
     echo "Ошибка запуска контейнеров!"
-    echo "Восстановление из резервной копии..."
+    echo "NEW Восстановление из резервной копии..."
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
     cd "$INSTALL_DIR" || exit 1
