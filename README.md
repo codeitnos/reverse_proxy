@@ -1,4 +1,4 @@
-# Reverse Proxy Installer
+# Reverse Proxy
 
 Набор удобных команд для установки и обновления контейнера с реверс-прокси в **Proxmox**.
 
