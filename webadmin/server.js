@@ -11,9 +11,13 @@ const AdmZip = require('adm-zip');
 const multer = require('multer');
 const https = require('https');
 const execPromise = util.promisify(exec);
+const SyncScheduler = require('./sync-scheduler');
 
 const app = express();
 const PORT = 8881;
+
+// Создаем экземпляр планировщика синхронизации
+const syncScheduler = new SyncScheduler();
 
 // Настройка multer для загрузки файлов
 const upload = multer({
@@ -206,7 +210,8 @@ function loadUserData() {
     return {
         username: 'admin',
         passwordHash: bcrypt.hashSync('password123', 10),
-        cf_token: ''
+        cf_token: '',
+        sync_interval: null // null = отключено, или число минут: 30, 60, 720, 1440
     };
 }
 
@@ -1410,6 +1415,289 @@ app.post('/api/cloudflare/delete-dns', requireAuth, async (req, res) => {
     }
 });
 
+// ============================================================================
+// ФУНКЦИЯ АВТОМАТИЧЕСКОЙ СИНХРОНИЗАЦИИ DNS
+// ============================================================================
+
+/**
+ * Автоматическая синхронизация DNS записей
+ * Проверяет все активные записи и обновляет те, у которых IP не совпадает
+ */
+async function autoSyncAllDns() {
+    console.log('\n🤖 Начало автоматической синхронизации DNS...');
+
+    if (!userData.cf_token) {
+        console.error('❌ CloudFlare токен не настроен');
+        return {
+            success: false,
+            updated: 0,
+            errors: 1,
+            details: [{ error: true, message: 'CloudFlare токен не настроен' }]
+        };
+    }
+
+    try {
+        const serverIp = await getServerExternalIp();
+        if (!serverIp) {
+            console.error('❌ Не удалось получить внешний IP сервера');
+            return {
+                success: false,
+                updated: 0,
+                errors: 1,
+                details: [{ error: true, message: 'Не удалось получить внешний IP сервера' }]
+            };
+        }
+
+        console.log(`📡 Внешний IP сервера: ${serverIp}`);
+
+        let updatedCount = 0;
+        let errorCount = 0;
+        const details = [];
+
+        for (let i = 0; i < items.length; i++) {
+            try {
+                const item = items[i];
+
+                // Пропускаем неактивные записи
+                if (!item.active) {
+                    continue;
+                }
+
+                const rootDomain = getRootDomain(item.domain);
+                const zoneId = await getCloudFlareZoneId(rootDomain, userData.cf_token);
+
+                if (!zoneId) {
+                    console.log(`⚠️  ${item.domain}: домен не найден в CloudFlare`);
+                    details.push({
+                        domain: item.domain,
+                        error: true,
+                        message: 'Домен не найден в CloudFlare'
+                    });
+                    errorCount++;
+                    continue;
+                }
+
+                const record = await getCloudFlareARecord(zoneId, item.domain, userData.cf_token);
+
+                if (!record) {
+                    console.log(`⚠️  ${item.domain}: DNS запись не существует`);
+                    details.push({
+                        domain: item.domain,
+                        error: false,
+                        message: 'DNS запись не существует'
+                    });
+
+                    // Обновляем кеш
+                    items[i].cf_ip = null;
+                    items[i].cf_record_id = null;
+                    items[i].cf_zone_id = zoneId;
+                    items[i].cf_last_sync = new Date().toISOString();
+                    items[i].server_ip = serverIp;
+                    continue;
+                }
+
+                // Проверяем совпадение IP
+                const currentIp = record.content;
+
+                if (currentIp === serverIp) {
+                    console.log(`✅ ${item.domain}: IP совпадает (${currentIp})`);
+
+                    // Обновляем кеш
+                    items[i].cf_ip = currentIp;
+                    items[i].cf_record_id = record.id;
+                    items[i].cf_zone_id = zoneId;
+                    items[i].cf_last_sync = new Date().toISOString();
+                    items[i].server_ip = serverIp;
+
+                    details.push({
+                        domain: item.domain,
+                        error: false,
+                        updated: false,
+                        message: `IP совпадает (${currentIp})`
+                    });
+                } else {
+                    console.log(`🔄 ${item.domain}: IP изменился ${currentIp} → ${serverIp}, обновляем...`);
+
+                    // Обновляем DNS запись
+                    const updateResponse = await updateCloudFlareARecord(
+                        zoneId,
+                        record.id,
+                        item.domain,
+                        serverIp,
+                        userData.cf_token
+                    );
+
+                    if (updateResponse.success) {
+                        console.log(`✅ ${item.domain}: DNS успешно обновлен`);
+
+                        // Обновляем кеш
+                        items[i].cf_ip = serverIp;
+                        items[i].cf_record_id = record.id;
+                        items[i].cf_zone_id = zoneId;
+                        items[i].cf_last_sync = new Date().toISOString();
+                        items[i].server_ip = serverIp;
+
+                        updatedCount++;
+                        details.push({
+                            domain: item.domain,
+                            error: false,
+                            updated: true,
+                            message: `IP обновлен: ${currentIp} → ${serverIp}`
+                        });
+                    } else {
+                        console.error(`❌ ${item.domain}: ошибка обновления DNS`);
+                        errorCount++;
+                        details.push({
+                            domain: item.domain,
+                            error: true,
+                            message: 'Ошибка обновления DNS'
+                        });
+                    }
+                }
+
+            } catch (error) {
+                console.error(`❌ Ошибка синхронизации для ${items[i].domain}:`, error.message);
+                errorCount++;
+                details.push({
+                    domain: items[i].domain,
+                    error: true,
+                    message: error.message
+                });
+            }
+        }
+
+        // Сохраняем обновленные данные
+        saveItems();
+
+        console.log(`\n✅ Автоматическая синхронизация завершена:`);
+        console.log(`   Обновлено записей: ${updatedCount}`);
+        console.log(`   Ошибок: ${errorCount}`);
+
+        return {
+            success: true,
+            updated: updatedCount,
+            errors: errorCount,
+            serverIp,
+            details
+        };
+
+    } catch (error) {
+        console.error('❌ Критическая ошибка автосинхронизации:', error);
+        return {
+            success: false,
+            updated: 0,
+            errors: 1,
+            details: [{ error: true, message: error.message }]
+        };
+    }
+}
+
+// ============================================================================
+// API ENDPOINTS ДЛЯ УПРАВЛЕНИЯ СИНХРОНИЗАЦИЕЙ
+// ============================================================================
+
+// Получение настроек синхронизации
+app.get('/api/sync-settings', requireAuth, (req, res) => {
+    const status = syncScheduler.getStatus();
+
+    res.json({
+        sync_interval: userData.sync_interval || null,
+        scheduler_running: status.isRunning,
+        last_sync: status.lastSyncTime,
+        recent_history: status.recentHistory
+    });
+});
+
+// Обновление интервала синхронизации
+app.post('/api/sync-settings', requireAuth, async (req, res) => {
+    const { sync_interval } = req.body;
+
+    // Проверяем корректность значения
+    const validIntervals = [null, 30, 60, 720, 1440];
+    if (!validIntervals.includes(sync_interval)) {
+        return res.status(400).json({
+            error: 'Некорректный интервал синхронизации',
+            validValues: validIntervals
+        });
+    }
+
+    try {
+        userData.sync_interval = sync_interval;
+        saveUserData(userData);
+
+        // Перезапускаем планировщик с новыми настройками
+        if (sync_interval && userData.cf_token) {
+            syncScheduler.start(sync_interval, autoSyncAllDns, { userData, items });
+            console.log(`🔄 Планировщик синхронизации перезапущен с интервалом ${sync_interval} минут`);
+        } else {
+            syncScheduler.stop();
+            console.log('⏹️  Планировщик синхронизации остановлен');
+        }
+
+        res.json({
+            success: true,
+            message: sync_interval
+                ? `Автосинхронизация включена (каждые ${sync_interval} минут)`
+                : 'Автосинхронизация отключена',
+            sync_interval: sync_interval
+        });
+    } catch (error) {
+        console.error('❌ Ошибка при сохранении настроек синхронизации:', error);
+        res.status(500).json({ error: 'Ошибка при сохранении настроек', details: error.message });
+    }
+});
+
+// Ручной запуск синхронизации
+app.post('/api/manual-sync', requireAuth, async (req, res) => {
+    if (!userData.cf_token) {
+        return res.status(400).json({ error: 'CloudFlare токен не настроен' });
+    }
+
+    try {
+        const result = await autoSyncAllDns();
+
+        res.json({
+            success: true,
+            message: 'Ручная синхронизация завершена',
+            ...result
+        });
+    } catch (error) {
+        console.error('❌ Ошибка при ручной синхронизации:', error);
+        res.status(500).json({ error: 'Ошибка при ручной синхронизации', details: error.message });
+    }
+});
+
+// Получение истории синхронизаций
+app.get('/api/sync-history', requireAuth, (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    const history = syncScheduler.getHistory(limit);
+
+    res.json({
+        history,
+        total: history.length
+    });
+});
+
+// Очистка CloudFlare токена
+app.post('/api/clear-cf-token', requireAuth, async (req, res) => {
+    try {
+        userData.cf_token = '';
+        saveUserData(userData);
+
+        // Останавливаем планировщик при удалении токена
+        syncScheduler.stop();
+        console.log('⏹️  Планировщик синхронизации остановлен из-за удаления токена');
+
+        res.json({
+            success: true,
+            message: 'CloudFlare токен успешно удален'
+        });
+    } catch (error) {
+        console.error('❌ Ошибка при удалении токена:', error);
+        res.status(500).json({ error: 'Ошибка при удалении токена', details: error.message });
+    }
+});
+
 // Запуск сервера
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
@@ -1422,4 +1710,18 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📄 Шаблон nginx: ${NGINX_TEMPLATE_PATH}`);
     console.log(`🔐 Шаблон nginx SSL: ${NGINX_SSL_TEMPLATE_PATH}`);
     console.log(`☁️  CloudFlare токен: ${userData.cf_token ? 'настроен' : 'не настроен'}`);
+
+    // Запускаем планировщик синхронизации, если настроен интервал и есть токен
+    if (userData.sync_interval && userData.cf_token) {
+        console.log(`\n🔄 Запуск планировщика автосинхронизации DNS...`);
+        console.log(`⏰ Интервал: ${userData.sync_interval} минут`);
+        syncScheduler.start(userData.sync_interval, autoSyncAllDns, { userData, items });
+    } else {
+        console.log(`\n⏸️  Автосинхронизация DNS отключена`);
+        if (!userData.cf_token) {
+            console.log(`   Причина: CloudFlare токен не настроен`);
+        } else {
+            console.log(`   Причина: интервал синхронизации не установлен`);
+        }
+    }
 });
