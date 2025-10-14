@@ -96,7 +96,7 @@ fi
 # Восстанавливаем конфиги
 [ -f /tmp/backup_configs/.env ] && cp /tmp/backup_configs/.env "$INSTALL_DIR/"
 [ -d /tmp/backup_configs/config ] && cp -r /tmp/backup_configs/config "$INSTALL_DIR/"
-[ -d /tmp/backup_configs/configs ] && cp -r /tmp/backup_configs/configs "$INSTALL_DIR/"
+#[ -d /tmp/backup_configs/configs ] && cp -r /tmp/backup_configs/configs "$INSTALL_DIR/"
 [ -d /tmp/backup_configs/data ] && cp -r /tmp/backup_configs/data "$INSTALL_DIR/"
 [ -d /tmp/backup_configs/acme ] && cp -r /tmp/backup_configs/acme "$INSTALL_DIR/"
 
