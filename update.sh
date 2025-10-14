@@ -41,6 +41,11 @@ wget "$DOWNLOAD_URL" -O reverse_proxy.zip
 
 if [ $? -ne 0 ]; then
     echo "Ошибка загрузки!"
+    echo "Восстановление из резервной копии..."
+    rm -rf "$INSTALL_DIR"
+    cp -r "$BACKUP_DIR" "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
+    docker compose up -d
     exit 1
 fi
 
@@ -51,12 +56,17 @@ unzip -q reverse_proxy.zip -d /tmp/reverse_proxy_update
 
 if [ $? -ne 0 ]; then
     echo "Ошибка распаковки!"
+    echo "Восстановление из резервной копии..."
+    rm -rf "$INSTALL_DIR"
+    cp -r "$BACKUP_DIR" "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
+    docker compose up -d
     exit 1
 fi
 
 # Обновление файлов (сохраняем конфигурацию)
 echo "Обновление файлов..."
-cd /tmp/reverse_proxy_update/*
+cd /tmp/reverse_proxy_update/* || exit 1
 
 # Копируем новые файлы, кроме конфигов
 rsync -av --exclude='*.env' --exclude='config/' --exclude='data/' ./ "$INSTALL_DIR/"
@@ -66,6 +76,8 @@ if [ $? -ne 0 ]; then
     echo "Восстановление из резервной копии..."
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
+    docker compose up -d
     exit 1
 fi
 
@@ -82,10 +94,9 @@ docker compose up -d
 if [ $? -ne 0 ]; then
     echo "Ошибка запуска контейнеров!"
     echo "Восстановление из резервной копии..."
-    cd /
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
+    cd "$INSTALL_DIR" || exit 1
     docker compose up -d
     exit 1
 fi
