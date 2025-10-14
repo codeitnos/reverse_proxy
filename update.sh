@@ -77,7 +77,8 @@ mkdir -p /tmp/backup_configs
 [ -d "$INSTALL_DIR/acme" ] && cp -r "$INSTALL_DIR/acme" /tmp/backup_configs/
 
 # Удаляем старые файлы (кроме конфигов и данных)
-find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config' ! -name 'configs' ! -name 'data' ! -name 'acme' ! -name '.env' -exec rm -rf {} +
+#find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config' ! -name 'configs' ! -name 'data' ! -name 'acme' ! -name '.env' -exec rm -rf {} +
+find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config'  ! -name 'data' ! -name 'acme' ! -name '.env' -exec rm -rf {} +
 
 # Копируем новые файлы
 cp -r ./* "$INSTALL_DIR/"
