@@ -276,9 +276,20 @@ function createNginxConfig(domain, dest, ssl = false) {
 
         let template = fs.readFileSync(templatePath, 'utf8');
 
+        // Извлекаем хост из destination (убираем протокол http:// или https://)
+        let newHost = dest;
+        try {
+            const url = new URL(dest);
+            newHost = url.host; // host включает hostname и port (например: 192.168.1.22:8123)
+        } catch (e) {
+            // Если не удалось распарсить как URL, убираем протокол вручную
+            newHost = dest.replace(/^https?:\/\//, '');
+        }
+
         // Заменяем параметры
         template = template.replace(/{host}/g, domain);
         template = template.replace(/{destination}/g, dest);
+        template = template.replace(/{new_host}/g, newHost);
 
         // Для SSL-шаблона также заменяем {domain} на корневой домен
         if (ssl) {
