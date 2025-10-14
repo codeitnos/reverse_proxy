@@ -73,7 +73,7 @@ rsync -av --exclude='*.env' --exclude='config/' --exclude='data/' ./ "$INSTALL_D
 
 if [ $? -ne 0 ]; then
     echo "Ошибка обновления файлов!"
-    echo "Восстановление из резервной копии..."
+    echo "NEW 0 Восстановление из резервной копии..."
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
     cd "$INSTALL_DIR" || exit 1
