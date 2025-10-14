@@ -72,10 +72,12 @@ cd /tmp/reverse_proxy_update/* || exit 1
 mkdir -p /tmp/backup_configs
 [ -f "$INSTALL_DIR/.env" ] && cp "$INSTALL_DIR/.env" /tmp/backup_configs/
 [ -d "$INSTALL_DIR/config" ] && cp -r "$INSTALL_DIR/config" /tmp/backup_configs/
+[ -d "$INSTALL_DIR/configs" ] && cp -r "$INSTALL_DIR/configs" /tmp/backup_configs/
 [ -d "$INSTALL_DIR/data" ] && cp -r "$INSTALL_DIR/data" /tmp/backup_configs/
+[ -d "$INSTALL_DIR/acme" ] && cp -r "$INSTALL_DIR/acme" /tmp/backup_configs/
 
 # Удаляем старые файлы (кроме конфигов и данных)
-find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config' ! -name 'data' ! -name '.env' -exec rm -rf {} +
+find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config' ! -name 'configs' ! -name 'data' ! -name 'acme' ! -name '.env' -exec rm -rf {} +
 
 # Копируем новые файлы
 cp -r ./* "$INSTALL_DIR/"
@@ -94,7 +96,9 @@ fi
 # Восстанавливаем конфиги
 [ -f /tmp/backup_configs/.env ] && cp /tmp/backup_configs/.env "$INSTALL_DIR/"
 [ -d /tmp/backup_configs/config ] && cp -r /tmp/backup_configs/config "$INSTALL_DIR/"
+[ -d /tmp/backup_configs/configs ] && cp -r /tmp/backup_configs/configs "$INSTALL_DIR/"
 [ -d /tmp/backup_configs/data ] && cp -r /tmp/backup_configs/data "$INSTALL_DIR/"
+[ -d /tmp/backup_configs/acme ] && cp -r /tmp/backup_configs/acme "$INSTALL_DIR/"
 
 # Очистка временных файлов
 echo "Очистка..."
