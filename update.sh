@@ -68,23 +68,39 @@ fi
 echo "Обновление файлов..."
 cd /tmp/reverse_proxy_update/* || exit 1
 
-# Копируем новые файлы, кроме конфигов
-rsync -av --exclude='*.env' --exclude='config/' --exclude='data/' ./ "$INSTALL_DIR/"
+# Сохраняем важные файлы и директории
+mkdir -p /tmp/backup_configs
+[ -f "$INSTALL_DIR/.env" ] && cp "$INSTALL_DIR/.env" /tmp/backup_configs/
+[ -d "$INSTALL_DIR/config" ] && cp -r "$INSTALL_DIR/config" /tmp/backup_configs/
+[ -d "$INSTALL_DIR/data" ] && cp -r "$INSTALL_DIR/data" /tmp/backup_configs/
+
+# Удаляем старые файлы (кроме конфигов и данных)
+find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name 'config' ! -name 'data' ! -name '.env' -exec rm -rf {} +
+
+# Копируем новые файлы
+cp -r ./* "$INSTALL_DIR/"
 
 if [ $? -ne 0 ]; then
     echo "Ошибка обновления файлов!"
-    echo "NEW 0 Восстановление из резервной копии..."
+    echo "Восстановление из резервной копии..."
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
     cd "$INSTALL_DIR" || exit 1
     docker compose up -d
+    rm -rf /tmp/backup_configs
     exit 1
 fi
+
+# Восстанавливаем конфиги
+[ -f /tmp/backup_configs/.env ] && cp /tmp/backup_configs/.env "$INSTALL_DIR/"
+[ -d /tmp/backup_configs/config ] && cp -r /tmp/backup_configs/config "$INSTALL_DIR/"
+[ -d /tmp/backup_configs/data ] && cp -r /tmp/backup_configs/data "$INSTALL_DIR/"
 
 # Очистка временных файлов
 echo "Очистка..."
 rm -f /tmp/reverse_proxy.zip
 rm -rf /tmp/reverse_proxy_update
+rm -rf /tmp/backup_configs
 
 # Запуск контейнеров
 echo "Запуск Docker контейнеров..."
@@ -93,7 +109,7 @@ docker compose up -d
 
 if [ $? -ne 0 ]; then
     echo "Ошибка запуска контейнеров!"
-    echo "NEW Восстановление из резервной копии..."
+    echo "Восстановление из резервной копии..."
     rm -rf "$INSTALL_DIR"
     cp -r "$BACKUP_DIR" "$INSTALL_DIR"
     cd "$INSTALL_DIR" || exit 1
