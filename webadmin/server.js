@@ -154,7 +154,7 @@ async function createCloudFlareARecord(zoneId, subdomain, ip, token) {
             type: 'A',
             name: subdomain,
             content: ip,
-            ttl: 3600,
+            // ttl: 3600,
             proxied: false
         };
 
@@ -173,7 +173,7 @@ async function updateCloudFlareARecord(zoneId, recordId, subdomain, ip, token) {
             type: 'A',
             name: subdomain,
             content: ip,
-            ttl: 3600,
+            // ttl: 3600,
             proxied: false
         };
 
