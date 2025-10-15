@@ -154,7 +154,6 @@ async function createCloudFlareARecord(zoneId, subdomain, ip, token) {
             type: 'A',
             name: subdomain,
             content: ip,
-            // ttl: 3600,
             proxied: false
         };
 
@@ -173,7 +172,6 @@ async function updateCloudFlareARecord(zoneId, recordId, subdomain, ip, token) {
             type: 'A',
             name: subdomain,
             content: ip,
-            // ttl: 3600,
             proxied: false
         };
 
@@ -256,6 +254,47 @@ function saveItems() {
     }
 }
 
+// Функция для проверки наличия SSL сертификата
+function checkSslCertificate(domain) {
+    try {
+        const rootDomain = getRootDomain(domain);
+        const certPaths = [
+            path.join(ACME_DIR, `*.${rootDomain}_ecc`),
+            path.join(ACME_DIR, `*.${rootDomain}`)
+        ];
+
+        for (const certPath of certPaths) {
+            if (fs.existsSync(certPath)) {
+                // Проверяем наличие необходимых файлов сертификата
+                const files = fs.readdirSync(certPath);
+                const hasCert = files.some(f => f.endsWith('.cer') && !f.includes('ca.cer'));
+                const hasKey = files.some(f => f.endsWith('.key'));
+                const hasFullchain = files.some(f => f === 'fullchain.cer');
+
+                if (hasCert && hasKey && hasFullchain) {
+                    return {
+                        exists: true,
+                        path: certPath,
+                        rootDomain: rootDomain
+                    };
+                }
+            }
+        }
+
+        return {
+            exists: false,
+            rootDomain: rootDomain,
+            message: `SSL сертификат для домена *.${rootDomain} не найден. Получите сертификат через меню "🔐 Получить сертификат"`
+        };
+    } catch (error) {
+        console.error('❌ Ошибка проверки SSL сертификата:', error);
+        return {
+            exists: false,
+            error: error.message
+        };
+    }
+}
+
 // Функция для создания nginx конфига из шаблона
 function createNginxConfig(domain, dest, ssl = false) {
     try {
@@ -271,12 +310,12 @@ function createNginxConfig(domain, dest, ssl = false) {
         // Читаем шаблон
         if (!fs.existsSync(templatePath)) {
             console.error('❌ Шаблон nginx не найден:', templatePath);
-            return false;
+            return { success: false, error: 'Шаблон nginx не найден' };
         }
 
         let template = fs.readFileSync(templatePath, 'utf8');
 
-        // Извлекаем хост из destination (убираем протокол http:// или https://)
+        // Извлекаем хост из destination
         let newHost = dest;
         try {
             const url = new URL(dest);
@@ -302,10 +341,18 @@ function createNginxConfig(domain, dest, ssl = false) {
         const configPath = path.join(NGINX_CONFIG_DIR, domain+'.conf');
         fs.writeFileSync(configPath, template, 'utf8');
         console.log(`✅ Создан nginx конфиг: ${configPath}`);
-        return true;
+
+        return {
+            success: true,
+            config: template,
+            path: configPath
+        };
     } catch (error) {
         console.error('❌ Ошибка при создании nginx конфига:', error);
-        return false;
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
 
@@ -459,6 +506,18 @@ app.get('/api/items', requireAuth, (req, res) => {
 
 app.post('/api/items', requireAuth, async (req, res) => {
     const { domain, dest, item3, ssl, active } = req.body;
+
+    // Проверяем наличие SSL сертификата, если SSL включен
+    if (ssl) {
+        const certCheck = checkSslCertificate(domain);
+        if (!certCheck.exists) {
+            return res.status(400).json({
+                error: 'SSL сертификат не найден',
+                details: certCheck.message || certCheck.error
+            });
+        }
+    }
+
     const newItem = {
         id: itemIdCounter++,
         domain,
@@ -472,12 +531,21 @@ app.post('/api/items', requireAuth, async (req, res) => {
 
     // Создаем nginx конфиг, если запись активна
     if (newItem.active) {
-        createNginxConfig(domain, dest, newItem.ssl);
+        const configResult = createNginxConfig(domain, dest, newItem.ssl);
+
+        if (!configResult.success) {
+            items.pop();
+            itemIdCounter--;
+            saveItems();
+            return res.status(500).json({
+                error: 'Ошибка создания конфигурации',
+                details: configResult.error
+            });
+        }
 
         // Проверяем и перезагружаем nginx
         const nginxResult = await applyNginxChanges();
         if (!nginxResult.success) {
-            // Если ошибка, откатываем изменения
             items.pop();
             itemIdCounter--;
             saveItems();
@@ -485,7 +553,8 @@ app.post('/api/items', requireAuth, async (req, res) => {
 
             return res.status(500).json({
                 error: 'Ошибка конфигурации Nginx',
-                details: nginxResult.error
+                details: nginxResult.error,
+                config: configResult.config
             });
         }
     }
@@ -499,6 +568,17 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        // Проверяем наличие SSL сертификата, если SSL включен
+        if (ssl) {
+            const certCheck = checkSslCertificate(domain);
+            if (!certCheck.exists) {
+                return res.status(400).json({
+                    error: 'SSL сертификат не найден',
+                    details: certCheck.message || certCheck.error
+                });
+            }
+        }
+
         const oldItem = { ...items[itemIndex] };
         const oldDomain = items[itemIndex].domain;
         const oldActive = items[itemIndex].active;
@@ -518,9 +598,22 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
             deleteNginxConfig(oldDomain);
         }
 
+        let configResult = { success: true, config: '' };
+
         // Управляем конфигом в зависимости от статуса active
         if (items[itemIndex].active) {
-            createNginxConfig(domain, dest, items[itemIndex].ssl);
+            configResult = createNginxConfig(domain, dest, items[itemIndex].ssl);
+            if (!configResult.success) {
+                items[itemIndex] = oldItem;
+                saveItems();
+                if (oldDomain !== domain && oldActive) {
+                    createNginxConfig(oldDomain, oldItem.dest, oldItem.ssl);
+                }
+                return res.status(500).json({
+                    error: 'Ошибка создания конфигурации',
+                    details: configResult.error
+                });
+            }
         } else {
             deleteNginxConfig(domain);
         }
@@ -544,7 +637,8 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
 
             return res.status(500).json({
                 error: 'Ошибка конфигурации Nginx',
-                details: nginxResult.error
+                details: nginxResult.error,
+                config: configResult.config
             });
         }
 
@@ -561,13 +655,38 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        const domain = items[itemIndex].domain;
+
+        // Проверяем наличие SSL сертификата при включении SSL
+        if (ssl) {
+            const certCheck = checkSslCertificate(domain);
+            if (!certCheck.exists) {
+                return res.status(400).json({
+                    error: 'SSL сертификат не найден',
+                    details: certCheck.message || certCheck.error,
+                    certInfo: certCheck
+                });
+            }
+        }
+
         const oldSsl = items[itemIndex].ssl;
         items[itemIndex].ssl = ssl;
         saveItems();
 
+        let configResult = { success: true, config: '' };
+
         // Пересоздаем конфиг с новыми параметрами, если запись активна
         if (items[itemIndex].active) {
-            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
+            configResult = createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
+
+            if (!configResult.success) {
+                items[itemIndex].ssl = oldSsl;
+                saveItems();
+                return res.status(500).json({
+                    error: 'Ошибка создания конфигурации',
+                    details: configResult.error
+                });
+            }
 
             // Проверяем и перезагружаем nginx
             const nginxResult = await applyNginxChanges();
@@ -579,12 +698,17 @@ app.patch('/api/items/:id/toggle-ssl', requireAuth, async (req, res) => {
 
                 return res.status(500).json({
                     error: 'Ошибка конфигурации Nginx',
-                    details: nginxResult.error
+                    details: nginxResult.error,
+                    config: configResult.config
                 });
             }
         }
 
-        res.json({ success: true, ssl: items[itemIndex].ssl });
+        res.json({
+            success: true,
+            ssl: items[itemIndex].ssl,
+            config: configResult.config
+        });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
     }
@@ -597,13 +721,36 @@ app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
+        // Проверяем наличие SSL сертификата при активации записи с SSL
+        if (active && items[itemIndex].ssl) {
+            const certCheck = checkSslCertificate(items[itemIndex].domain);
+            if (!certCheck.exists) {
+                return res.status(400).json({
+                    error: 'SSL сертификат не найден',
+                    details: certCheck.message || certCheck.error,
+                    certInfo: certCheck
+                });
+            }
+        }
+
         const oldActive = items[itemIndex].active;
         items[itemIndex].active = active;
         saveItems();
 
+        let configResult = { success: true, config: '' };
+
         // Управляем конфигом в зависимости от нового статуса
         if (active) {
-            createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
+            configResult = createNginxConfig(items[itemIndex].domain, items[itemIndex].dest, items[itemIndex].ssl);
+
+            if (!configResult.success) {
+                items[itemIndex].active = oldActive;
+                saveItems();
+                return res.status(500).json({
+                    error: 'Ошибка создания конфигурации',
+                    details: configResult.error
+                });
+            }
         } else {
             deleteNginxConfig(items[itemIndex].domain);
         }
@@ -624,11 +771,16 @@ app.patch('/api/items/:id/toggle-active', requireAuth, async (req, res) => {
 
             return res.status(500).json({
                 error: 'Ошибка конфигурации Nginx',
-                details: nginxResult.error
+                details: nginxResult.error,
+                config: configResult.config
             });
         }
 
-        res.json({ success: true, active: items[itemIndex].active });
+        res.json({
+            success: true,
+            active: items[itemIndex].active,
+            config: configResult.config
+        });
     } else {
         res.status(404).json({ error: 'Запись не найдена' });
     }
@@ -722,7 +874,7 @@ app.get('/api/export-settings', requireAuth, async (req, res) => {
 
         // Создаем архиватор
         const archive = archiver('zip', {
-            zlib: { level: 9 } // максимальное сжатие
+            zlib: { level: 9 }
         });
 
         // Обработка ошибок
@@ -764,7 +916,6 @@ app.get('/api/export-settings', requireAuth, async (req, res) => {
         }
     }
 });
-
 
 function clearDir(dirPath) {
     if (!fs.existsSync(dirPath)) return;
@@ -834,10 +985,6 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
             console.log('✅ Восстановлена папка acme.sh');
         }
 
-
-
-
-        // Пересоздаем все активные nginx конфиги
         console.log('🔄 Пересоздание nginx конфигов...');
         for (const item of items) {
             if (item.active) {
@@ -1426,14 +1573,7 @@ app.post('/api/cloudflare/delete-dns', requireAuth, async (req, res) => {
     }
 });
 
-// ============================================================================
-// ФУНКЦИЯ АВТОМАТИЧЕСКОЙ СИНХРОНИЗАЦИИ DNS
-// ============================================================================
-
-/**
- * Автоматическая синхронизация DNS записей
- * Проверяет все активные записи и обновляет те, у которых IP не совпадает
- */
+// Автоматическая синхронизация DNS записей
 async function autoSyncAllDns() {
     console.log('\n🤖 Начало автоматической синхронизации DNS...');
 
