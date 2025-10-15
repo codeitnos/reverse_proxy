@@ -112,7 +112,7 @@
             transition: all 0.3s;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 20px;
         }
         .item-card:hover {
@@ -162,6 +162,7 @@
             gap: 10px;
             align-items: center;
             position: relative;
+            align-self: flex-start;
         }
         .item-menu-btn {
             background: none;
@@ -730,8 +731,13 @@
             }
             .item-card {
                 padding: 12px;
-                flex-direction: column;
+                flex-direction: row; /* Оставляем row вместо column */
                 gap: 15px;
+                align-items: flex-start;
+            }
+            .item-content {
+                flex: 1;
+                min-width: 0; /* Важно для правильного переноса текста */
             }
             .item-content p {
                 font-size: 14px;
@@ -760,8 +766,7 @@
                 gap: 8px;
             }
             .item-actions {
-                width: 100%;
-                justify-content: flex-end;
+                flex-shrink: 0; /* Не сжимать кнопку */
             }
             .btn {
                 font-size: 13px;
@@ -782,7 +787,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>📝 Управление записями</h1>
+        <h1>Reverse Proxy</h1>
         <div class="header-menu-wrapper">
             <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
 
