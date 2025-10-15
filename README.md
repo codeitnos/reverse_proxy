@@ -37,10 +37,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/codeitnos/reverse_proxy/
 
 ### Установка
 
-1. **Клонируйте репозиторий:**
+1. **Скачайте и распакуйте проект:**
 ```bash
-   git clone https://github.com/codeitnos/reverse_proxy.git
-   cd reverse_proxy
+   wget https://github.com/codeitnos/reverse_proxy/archive/refs/tags/latest.zip
+   unzip latest.zip
+   cd reverse_proxy-latest
 ```
 
 2. **Запустите контейнеры:**
