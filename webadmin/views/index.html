@@ -1726,8 +1726,8 @@
             <p><strong>Источник:</strong> <a href="http://${escapeHtml(item.domain)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.domain)}</a> <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
             ${notesHtml}
             ${dnsInfoHtml}
-            <p><strong>Направление:</strong> ${escapeHtml(item.dest)}</p>
-            <p style="display: none;"><strong>Пункт 3:</strong> ${escapeHtml(item.item3)}</p>
+            <p><strong>Направление:</strong> <a href="${escapeHtml(item.dest)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.dest)}</a></p>
+            <p style="display: none;"><strong>Пункт 3:</strong>  ${escapeHtml(item.item3)}</p>
             <div class="item-status">
               <div class="status-item">
                 <input type="checkbox" class="status-checkbox" ${item.ssl ? 'checked' : ''}
