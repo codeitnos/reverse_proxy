@@ -932,6 +932,136 @@ function clearDir(dirPath) {
     }
 }
 
+// Улучшенная функция clearDir с обработкой ошибок и логированием
+function clearDirImproved(dirPath) {
+    console.log(`🧹 Начало очистки директории: ${dirPath}`);
+
+    if (!fs.existsSync(dirPath)) {
+        console.log('   ⚠️  Директория не существует');
+        return { success: true, cleared: 0, errors: [] };
+    }
+
+    let clearedCount = 0;
+    const errors = [];
+
+    try {
+        const entries = fs.readdirSync(dirPath);
+        console.log(`   📋 Найдено элементов для удаления: ${entries.length}`);
+
+        for (const entry of entries) {
+            const entryPath = path.join(dirPath, entry);
+
+            try {
+                const stat = fs.lstatSync(entryPath);
+
+                if (stat.isDirectory()) {
+                    console.log(`   🗑️  Удаление папки: ${entry}`);
+                    fs.rmSync(entryPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+                    clearedCount++;
+                } else {
+                    console.log(`   🗑️  Удаление файла: ${entry}`);
+                    fs.unlinkSync(entryPath);
+                    clearedCount++;
+                }
+                console.log(`      ✓ Успешно удалено: ${entry}`);
+            } catch (err) {
+                console.error(`      ✗ Ошибка удаления ${entry}:`, err.message);
+                errors.push({ file: entry, error: err.message });
+
+                // Пытаемся удалить с sudo/повышенными правами через chmod
+                try {
+                    if (stat.isDirectory()) {
+                        // Рекурсивно меняем права
+                        execSync(`chmod -R 777 "${entryPath}" 2>/dev/null || true`);
+                        fs.rmSync(entryPath, { recursive: true, force: true });
+                    } else {
+                        execSync(`chmod 777 "${entryPath}" 2>/dev/null || true`);
+                        fs.unlinkSync(entryPath);
+                    }
+                    console.log(`      ✓ Удалено после изменения прав: ${entry}`);
+                    clearedCount++;
+                } catch (err2) {
+                    console.error(`      ✗ Не удалось удалить даже после chmod:`, err2.message);
+                }
+            }
+        }
+
+        console.log(`   ✅ Очистка завершена: удалено ${clearedCount} из ${entries.length}`);
+        return { success: errors.length === 0, cleared: clearedCount, errors };
+
+    } catch (err) {
+        console.error('   ❌ Критическая ошибка при очистке:', err.message);
+        return { success: false, cleared: clearedCount, errors: [{ file: 'directory', error: err.message }] };
+    }
+}
+
+// Улучшенная функция copyFolderRecursiveSync с обработкой ошибок
+function copyFolderRecursiveSyncImproved(source, target) {
+    console.log(`📋 Копирование: ${source} -> ${target}`);
+
+    if (!fs.existsSync(source)) {
+        console.error('   ❌ Источник не существует');
+        return { success: false, copied: 0, errors: [{ file: source, error: 'Source does not exist' }] };
+    }
+
+    let copiedCount = 0;
+    const errors = [];
+
+    try {
+        // Создаем целевую директорию
+        if (!fs.existsSync(target)) {
+            fs.mkdirSync(target, { recursive: true, mode: 0o777 });
+            console.log(`   📁 Создана целевая директория: ${target}`);
+        }
+
+        const stat = fs.lstatSync(source);
+
+        if (stat.isDirectory()) {
+            const files = fs.readdirSync(source);
+            console.log(`   📄 Найдено элементов для копирования: ${files.length}`);
+
+            for (const file of files) {
+                const curSource = path.join(source, file);
+                const curTarget = path.join(target, file);
+
+                try {
+                    const curStat = fs.lstatSync(curSource);
+
+                    if (curStat.isDirectory()) {
+                        console.log(`   📁 Копирование папки: ${file}`);
+                        const result = copyFolderRecursiveSyncImproved(curSource, curTarget);
+                        copiedCount += result.copied;
+                        errors.push(...result.errors);
+                    } else if (curStat.isSymbolicLink()) {
+                        console.log(`   🔗 Копирование символической ссылки: ${file}`);
+                        const linkTarget = fs.readlinkSync(curSource);
+                        fs.symlinkSync(linkTarget, curTarget);
+                        copiedCount++;
+                    } else {
+                        console.log(`   📄 Копирование файла: ${file}`);
+                        fs.copyFileSync(curSource, curTarget);
+                        // Копируем права доступа
+                        fs.chmodSync(curTarget, curStat.mode);
+                        copiedCount++;
+                    }
+                    console.log(`      ✓ Успешно: ${file}`);
+
+                } catch (err) {
+                    console.error(`      ✗ Ошибка копирования ${file}:`, err.message);
+                    errors.push({ file: file, error: err.message });
+                }
+            }
+        }
+
+        console.log(`   ✅ Копирование завершено: ${copiedCount} элементов`);
+        return { success: errors.length === 0, copied: copiedCount, errors };
+
+    } catch (err) {
+        console.error('   ❌ Критическая ошибка при копировании:', err.message);
+        return { success: false, copied: copiedCount, errors: [{ file: 'directory', error: err.message }] };
+    }
+}
+
 // Импорт настроек из ZIP
 app.post('/api/import-settings', requireAuth, upload.single('settings'), async (req, res) => {
     let tempDir = null;
@@ -945,12 +1075,63 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
 
         // Создаем временную директорию для распаковки
         tempDir = path.join('/tmp', 'import_' + Date.now());
-        fs.mkdirSync(tempDir, { recursive: true });
+        fs.mkdirSync(tempDir, { recursive: true, mode: 0o777 });
+        console.log('📁 Создана временная директория:', tempDir);
 
         // Распаковываем ZIP
         const zip = new AdmZip(req.file.path);
-        zip.extractAllTo(tempDir, true);
+
+        // Устанавливаем права доступа для распакованных файлов
+        const zipEntries = zip.getEntries();
+        console.log(`📦 ZIP содержит ${zipEntries.length} элементов`);
+
+        // Распаковываем с установкой прав
+        zipEntries.forEach(entry => {
+            try {
+                if (entry.isDirectory) {
+                    const dirPath = path.join(tempDir, entry.entryName);
+                    if (!fs.existsSync(dirPath)) {
+                        fs.mkdirSync(dirPath, { recursive: true, mode: 0o777 });
+                    }
+                } else {
+                    const filePath = path.join(tempDir, entry.entryName);
+                    const fileDir = path.dirname(filePath);
+                    if (!fs.existsSync(fileDir)) {
+                        fs.mkdirSync(fileDir, { recursive: true, mode: 0o777 });
+                    }
+                    fs.writeFileSync(filePath, entry.getData(), { mode: 0o666 });
+                }
+            } catch (err) {
+                console.error(`⚠️  Ошибка распаковки ${entry.entryName}:`, err.message);
+            }
+        });
+
         console.log('✅ Архив распакован в:', tempDir);
+
+        // Проверяем структуру распакованного архива
+        console.log('\n📦 === АНАЛИЗ СТРУКТУРЫ АРХИВА ===');
+        const tempContents = fs.readdirSync(tempDir);
+        console.log(`📋 Элементов в корне временной папки: ${tempContents.length}`);
+        tempContents.forEach(item => {
+            const itemPath = path.join(tempDir, item);
+            const stat = fs.statSync(itemPath);
+            const type = stat.isDirectory() ? '📁 DIR ' : '📄 FILE';
+            console.log(`   ${type}: ${item}`);
+
+            // Если это директория, показываем её содержимое
+            if (stat.isDirectory()) {
+                try {
+                    const subItems = fs.readdirSync(itemPath);
+                    console.log(`      └─ Содержит ${subItems.length} элементов`);
+                    if (subItems.length > 0 && subItems.length <= 10) {
+                        subItems.forEach(sub => console.log(`         - ${sub}`));
+                    }
+                } catch (e) {
+                    console.log(`      └─ Ошибка чтения: ${e.message}`);
+                }
+            }
+        });
+        console.log('📦 === КОНЕЦ АНАЛИЗА ===\n');
 
         // Восстанавливаем items.json
         const itemsPath = path.join(tempDir, 'items.json');
@@ -962,6 +1143,17 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
             const newItemsData = loadItems();
             items = newItemsData.items;
             itemIdCounter = newItemsData.counter;
+
+            // Отключаем ssl и active для всех записей
+            items = items.map(item => ({
+                ...item,
+                ssl: false,
+                active: false
+            }));
+
+            // Сохраняем изменения
+            saveItems();
+            console.log('🔒 SSL и Active отключены для всех импортированных записей');
         }
 
         // Восстанавливаем user.json
@@ -974,37 +1166,137 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
             userData = loadUserData();
         }
 
+        // Очищаем старые nginx конфиги (кроме default.conf)
+        console.log('🧹 Очистка старых nginx конфигов...');
+        if (fs.existsSync(NGINX_CONFIG_DIR)) {
+            const configFiles = fs.readdirSync(NGINX_CONFIG_DIR);
+            let deletedCount = 0;
+            for (const file of configFiles) {
+                if (file !== 'default.conf' && file.endsWith('.conf')) {
+                    try {
+                        const filePath = path.join(NGINX_CONFIG_DIR, file);
+                        fs.unlinkSync(filePath);
+                        console.log(`   ✓ Удален: ${file}`);
+                        deletedCount++;
+                    } catch (err) {
+                        console.error(`   ✗ Ошибка удаления ${file}:`, err.message);
+                    }
+                }
+            }
+            console.log(`   Удалено конфигов: ${deletedCount}`);
+        }
+
         // Восстанавливаем папку acme.sh
-        const acmeTempPath = path.join(tempDir, 'acme.sh');
+        // Ищем папку acme.sh (может быть в корне или в подпапке)
+        let acmeTempPath = null;
 
-        if (fs.existsSync(acmeTempPath)) {
-            if (fs.existsSync(ACME_DIR)) {
-                clearDir(ACME_DIR); // очищаем папку, не удаляя её
-                console.log('🧹 Очищено содержимое папки acme.sh');
+        console.log('\n🔍 === ПОИСК ПАПКИ ACME.SH ===');
+
+        // Проверяем напрямую в корне
+        const directPath = path.join(tempDir, 'acme.sh');
+        console.log(`🔍 Проверка: ${directPath}`);
+        if (fs.existsSync(directPath) && fs.statSync(directPath).isDirectory()) {
+            acmeTempPath = directPath;
+            console.log('✅ Найдена в корне временной папки');
+        } else {
+            console.log('❌ Не найдена в корне, ищем в подпапках...');
+
+            // Ищем в подпапках (первый уровень вложенности)
+            for (const item of tempContents) {
+                const itemPath = path.join(tempDir, item);
+                if (fs.statSync(itemPath).isDirectory()) {
+                    const possiblePath = path.join(itemPath, 'acme.sh');
+                    console.log(`🔍 Проверка: ${possiblePath}`);
+                    if (fs.existsSync(possiblePath) && fs.statSync(possiblePath).isDirectory()) {
+                        acmeTempPath = possiblePath;
+                        console.log(`✅ Найдена в: ${item}/acme.sh`);
+                        break;
+                    }
+                }
             }
-
-            copyFolderRecursiveSync(acmeTempPath, ACME_DIR);
-            console.log('✅ Восстановлена папка acme.sh');
         }
 
-        console.log('🔄 Пересоздание nginx конфигов...');
-        for (const item of items) {
-            if (item.active) {
-                createNginxConfig(item.domain, item.dest, item.ssl);
+        if (acmeTempPath && fs.existsSync(acmeTempPath)) {
+            console.log('\n🔐 === НАЧАЛО ВОССТАНОВЛЕНИЯ СЕРТИФИКАТОВ ===');
+            console.log(`📍 Источник: ${acmeTempPath}`);
+            console.log(`📍 Назначение: ${ACME_DIR}`);
+
+            // Проверяем содержимое источника
+            const sourceItems = fs.readdirSync(acmeTempPath);
+            console.log(`📦 В архиве найдено элементов: ${sourceItems.length}`);
+            if (sourceItems.length > 0) {
+                console.log('📋 Содержимое архива:');
+                sourceItems.forEach(item => console.log(`   - ${item}`));
             }
+
+            // Создаем директорию если не существует
+            if (!fs.existsSync(ACME_DIR)) {
+                fs.mkdirSync(ACME_DIR, { recursive: true, mode: 0o777 });
+                console.log('📁 Создана директория:', ACME_DIR);
+            } else {
+                console.log('📁 Директория уже существует:', ACME_DIR);
+
+                // Проверяем содержимое перед очисткой
+                const beforeClear = fs.readdirSync(ACME_DIR);
+                console.log(`📦 До очистки элементов: ${beforeClear.length}`);
+
+                // Очищаем существующую директорию
+                console.log('\n🧹 === ОЧИСТКА ДИРЕКТОРИИ ===');
+                const clearResult = clearDirImproved(ACME_DIR);
+
+                if (!clearResult.success) {
+                    console.error('⚠️  Очистка завершена с ошибками:', clearResult.errors);
+                } else {
+                    console.log(`✅ Директория успешно очищена (${clearResult.cleared} элементов)`);
+                }
+
+                // Проверяем что осталось после очистки
+                const afterClear = fs.readdirSync(ACME_DIR);
+                console.log(`📦 После очистки осталось элементов: ${afterClear.length}`);
+                if (afterClear.length > 0) {
+                    console.log('⚠️  Не удалось удалить:');
+                    afterClear.forEach(item => console.log(`   - ${item}`));
+                }
+            }
+
+            // Копируем содержимое
+            console.log('\n📋 === КОПИРОВАНИЕ ФАЙЛОВ ===');
+            const copyResult = copyFolderRecursiveSyncImproved(acmeTempPath, ACME_DIR);
+
+            if (!copyResult.success) {
+                console.error('⚠️  Копирование завершено с ошибками:', copyResult.errors);
+            } else {
+                console.log(`✅ Успешно скопировано элементов: ${copyResult.copied}`);
+            }
+
+            // Проверяем финальное состояние
+            const finalItems = fs.readdirSync(ACME_DIR);
+            console.log(`\n📦 Финальное содержимое (${finalItems.length} элементов):`);
+            finalItems.forEach(item => {
+                const itemPath = path.join(ACME_DIR, item);
+                const stat = fs.statSync(itemPath);
+                const type = stat.isDirectory() ? '📁' : '📄';
+                console.log(`   ${type} ${item}`);
+            });
+
+            console.log('🔐 === ВОССТАНОВЛЕНИЕ СЕРТИФИКАТОВ ЗАВЕРШЕНО ===\n');
+        } else {
+            console.log('⚠️  Папка acme.sh не найдена в архиве');
         }
 
-        // Перезагружаем nginx
+        // Перезагружаем nginx (все конфиги удалены, записи неактивны)
+        console.log('🔄 Применение изменений nginx...');
         await applyNginxChanges();
 
         // Удаляем временные файлы
         fs.unlinkSync(req.file.path);
         fs.rmSync(tempDir, { recursive: true, force: true });
+        console.log('🗑️  Временные файлы удалены');
 
         console.log('✅ Импорт настроек завершен успешно');
         res.json({
             success: true,
-            message: 'Настройки успешно загружены и применены!'
+            message: 'Настройки успешно загружены! SSL и Active отключены для всех записей. Активируйте нужные записи вручную.'
         });
 
     } catch (error) {
@@ -1012,10 +1304,18 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
 
         // Очистка временных файлов в случае ошибки
         if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (e) {
+                console.error('Ошибка удаления загруженного файла:', e.message);
+            }
         }
         if (tempDir && fs.existsSync(tempDir)) {
-            fs.rmSync(tempDir, { recursive: true, force: true });
+            try {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            } catch (e) {
+                console.error('Ошибка удаления временной директории:', e.message);
+            }
         }
 
         res.status(500).json({
@@ -1024,6 +1324,7 @@ app.post('/api/import-settings', requireAuth, upload.single('settings'), async (
         });
     }
 });
+
 
 // Получение списка существующих сертификатов
 app.get('/api/ssl-certificates', requireAuth, async (req, res) => {
@@ -1134,7 +1435,7 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
         console.log('🔐 Начало процесса получения SSL-сертификата через CloudFlare...');
         console.log(`   Домен: ${domain}`);
 
-        const issueCommand = `docker exec -e CF_Token='${userData.cf_token}' acme_sh acme.sh --issue --dns dns_cf -d *.${domain} --server letsencrypt`;
+        const issueCommand = `docker exec -e CF_Token='${userData.cf_token}' acme_sh acme.sh --issue --dns dns_cf -d *.${domain} -d ${domain} --server letsencrypt`;
 
         let issueResult;
         let alreadyExists = false;
