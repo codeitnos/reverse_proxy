@@ -1,7 +1,7 @@
 {
-  "name": "auth-app",
-  "version": "1.0.0",
-  "description": "Веб-приложение с авторизацией",
+  "name": "reverse-proxy-manager",
+  "version": "1.0.5",
+  "description": "Reverse Proxy Management System with SSL and DNS",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -1498,6 +1498,160 @@ app.post('/api/get-ssl-certificate', requireAuth, async (req, res) => {
     }
 });
 
+// Удаление SSL-сертификата
+app.post('/api/delete-ssl-certificate', requireAuth, async (req, res) => {
+    const { domain } = req.body;
+
+    if (!domain) {
+        return res.status(400).json({ error: 'Домен обязателен для заполнения' });
+    }
+
+    try {
+        console.log('🗑️  Начало удаления SSL-сертификата для домена:', domain);
+
+        const rootDomain = getRootDomain(domain);
+        const certPaths = [
+            path.join(ACME_DIR, `*.${rootDomain}_ecc`),
+            path.join(ACME_DIR, `*.${rootDomain}`)
+        ];
+
+        let deleted = false;
+        let deletedPath = '';
+
+        for (const certPath of certPaths) {
+            if (fs.existsSync(certPath)) {
+                fs.rmSync(certPath, { recursive: true, force: true });
+                deleted = true;
+                deletedPath = certPath;
+                console.log('✅ Удалена папка сертификата:', certPath);
+            }
+        }
+
+        if (deleted) {
+            // Отключаем SSL для всех записей с этим доменом
+            let updatedItems = 0;
+            for (let i = 0; i < items.length; i++) {
+                const itemRootDomain = getRootDomain(items[i].domain);
+                if (itemRootDomain === rootDomain && items[i].ssl) {
+                    items[i].ssl = false;
+                    updatedItems++;
+
+                    // Пересоздаем конфиг без SSL
+                    if (items[i].active) {
+                        createNginxConfig(items[i].domain, items[i].dest, false);
+                    }
+                }
+            }
+
+            if (updatedItems > 0) {
+                saveItems();
+                await applyNginxChanges();
+            }
+
+            res.json({
+                success: true,
+                message: `Сертификат для домена *.${rootDomain} успешно удален`,
+                deletedPath,
+                updatedItems
+            });
+        } else {
+            res.status(404).json({
+                error: 'Сертификат не найден',
+                details: `Сертификат для домена *.${rootDomain} не существует`
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка удаления сертификата:', error);
+        res.status(500).json({
+            error: 'Ошибка при удалении сертификата',
+            details: error.message
+        });
+    }
+});
+
+// Удаление всех SSL-сертификатов
+app.post('/api/delete-all-ssl-certificates', requireAuth, async (req, res) => {
+    try {
+        console.log('🗑️  Начало удаления всех SSL-сертификатов...');
+
+        if (!fs.existsSync(ACME_DIR)) {
+            return res.status(404).json({ error: 'Папка с сертификатами не найдена' });
+        }
+
+        const items_in_dir = fs.readdirSync(ACME_DIR);
+        let deletedCount = 0;
+
+        for (const item of items_in_dir) {
+            const itemPath = path.join(ACME_DIR, item);
+            const stats = fs.statSync(itemPath);
+
+            // Удаляем только папки с сертификатами (которые начинаются с "*.")
+            if (stats.isDirectory() && item.startsWith('*.')) {
+                try {
+                    fs.rmSync(itemPath, { recursive: true, force: true });
+                    deletedCount++;
+                    console.log('✅ Удалена папка:', item);
+                } catch (err) {
+                    console.error(`❌ Ошибка удаления ${item}:`, err.message);
+                }
+            }
+        }
+
+        // Отключаем SSL для всех записей
+        let updatedItems = 0;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].ssl) {
+                items[i].ssl = false;
+                updatedItems++;
+
+                // Пересоздаем конфиг без SSL
+                if (items[i].active) {
+                    createNginxConfig(items[i].domain, items[i].dest, false);
+                }
+            }
+        }
+
+        if (updatedItems > 0) {
+            saveItems();
+            await applyNginxChanges();
+        }
+
+        console.log(`✅ Удаление завершено. Удалено сертификатов: ${deletedCount}`);
+
+        res.json({
+            success: true,
+            message: `Успешно удалено сертификатов: ${deletedCount}`,
+            deletedCount,
+            updatedItems
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка при удалении всех сертификатов:', error);
+        res.status(500).json({
+            error: 'Ошибка при удалении сертификатов',
+            details: error.message
+        });
+    }
+});
+
+// Получение версии приложения
+app.get('/api/version', (req, res) => {
+    try {
+        const packageJson = require('./package.json');
+        res.json({
+            version: packageJson.version,
+            name: packageJson.name
+        });
+    } catch (error) {
+        res.json({
+            version: '1.0.0',
+            name: 'Reverse Proxy Manager'
+        });
+    }
+});
+
+
 // Получение внешнего IP сервера
 app.get('/api/server-external-ip', requireAuth, async (req, res) => {
     try {

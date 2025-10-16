@@ -492,6 +492,7 @@
             border: 1px solid #dee2e6;
             border-radius: 5px;
         }
+
         .cert-item {
             padding: 10px 12px;
             border-bottom: 1px solid #dee2e6;
@@ -501,6 +502,11 @@
             transition: background 0.2s;
             gap: 10px;
         }
+
+        .cert-item button {
+            flex-shrink: 0;
+        }
+
         .cert-item:last-child {
             border-bottom: none;
         }
@@ -684,7 +690,7 @@
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             z-index: 1000;
-            min-width: 250px;
+            min-width: 280px;
             overflow: hidden;
         }
         .dropdown-menu.show {
@@ -834,7 +840,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>Reverse Proxy</h1>
+        <h1>Reverse Proxy Manager</h1>
         <div class="header-menu-wrapper">
             <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
 
@@ -847,7 +853,7 @@
                     ⏱️ Автосинхронизация DNS
                 </div>
                 <div class="dropdown-menu-item" onclick="exportSettings(); closeMenu();">
-                    📥 Выгрузить настройки
+                    💾 Сохранить настройки
                 </div>
                 <div class="dropdown-menu-item" onclick="openImportModal(); closeMenu();">
                     📤 Загрузить настройки
@@ -1017,6 +1023,7 @@
 </div>
 
 <!-- Модальное окно для получения SSL-сертификата -->
+
 <div id="sslModal" class="modal">
     <div class="modal-content ssl-modal">
         <div class="modal-header">
@@ -1039,7 +1046,12 @@
 
         <!-- Список существующих сертификатов -->
         <div id="certificatesSection">
-            <div class="certificates-header">📜 Существующие сертификаты</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 10px 12px; border-bottom: 2px solid #dee2e6;">
+                <span style="font-weight: 600; color: #495057;">📜 Существующие сертификаты</span>
+                <button class="btn btn-danger" onclick="deleteAllCertificates()" style="padding: 5px 12px; font-size: 12px;">
+                    🗑️ Удалить все
+                </button>
+            </div>
             <div id="certificatesList" class="certificates-list">
                 <div class="no-certificates">Загрузка...</div>
             </div>
@@ -1412,14 +1424,17 @@
                     }
 
                     return `
-                        <div class="cert-item">
-                            <div class="cert-domain">*.${escapeHtml(cert.domain)}</div>
-                            <div class="cert-status">
-                                <span class="cert-badge ${badgeClass}">${badgeText}</span>
-                                <span class="cert-expiry">До ${formattedDate}</span>
-                            </div>
+                    <div class="cert-item">
+                        <div class="cert-domain">*.${escapeHtml(cert.domain)}</div>
+                        <div class="cert-status">
+                            <span class="cert-badge ${badgeClass}">${badgeText}</span>
+                            <span class="cert-expiry">До ${formattedDate}</span>
                         </div>
-                    `;
+                        <button class="dns-btn delete" onclick="deleteCertificate('${escapeHtml(cert.domain)}')" title="Удалить сертификат">
+                            🗑️
+                        </button>
+                    </div>
+                `;
                 }).join('');
             } else {
                 listDiv.innerHTML = '<div class="no-certificates">Нет установленных сертификатов</div>';
@@ -1430,6 +1445,75 @@
                 '<div class="no-certificates">Ошибка загрузки списка сертификатов</div>';
         }
     }
+
+    // Удаление одного сертификата
+    async function deleteCertificate(domain) {
+        if (!confirm(`⚠️ ВНИМАНИЕ!\n\nВы уверены, что хотите удалить сертификат для домена *.${domain}?\n\nЭто действие:\n- Удалит все файлы сертификата\n- Отключит SSL для всех записей с этим доменом\n- Невозможно отменить`)) {
+            return;
+        }
+
+        showLoading('Удаление сертификата...');
+
+        try {
+            const response = await fetch('/api/delete-ssl-certificate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain })
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(`✅ ${result.message}\n\nОбновлено записей: ${result.updatedItems || 0}`);
+                loadCertificates();
+                loadItems(); // Обновляем список записей
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка при удалении сертификата'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+    // Удаление всех сертификатов
+    async function deleteAllCertificates() {
+        if (!confirm('⚠️ КРИТИЧЕСКОЕ ПРЕДУПРЕЖДЕНИЕ!\n\nВы уверены, что хотите удалить ВСЕ сертификаты?\n\nЭто действие:\n- Удалит все SSL-сертификаты\n- Отключит SSL для ВСЕХ записей\n- НЕВОЗМОЖНО ОТМЕНИТЬ\n\nВы действительно хотите продолжить?')) {
+            return;
+        }
+
+        if (!confirm('Последнее предупреждение!\n\nВсе сертификаты будут безвозвратно удалены.\n\nПродолжить?')) {
+            return;
+        }
+
+        showLoading('Удаление всех сертификатов...');
+
+        try {
+            const response = await fetch('/api/delete-all-ssl-certificates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            hideLoading();
+
+            if (response.ok) {
+                const result = await response.json();
+                alert(`✅ ${result.message}\n\nОбновлено записей: ${result.updatedItems || 0}`);
+                loadCertificates();
+                loadItems(); // Обновляем список записей
+            } else {
+                const error = await response.json();
+                alert('❌ ' + (error.error || 'Ошибка при удалении сертификатов'));
+            }
+        } catch (error) {
+            hideLoading();
+            alert('❌ Ошибка при подключении к серверу: ' + error.message);
+        }
+    }
+
+
 
     function openSslModal() {
         loadCertificates();
@@ -2191,5 +2275,38 @@
         }
     }
 </script>
+
+
+<!-- Футер с версией -->
+<footer id="appFooter" style="text-align: center; padding: 20px 0; color: #6c757d; font-size: 12px; margin-top: 30px; border-top: 1px solid #e9ecef;">
+    <div class="container" style="max-width: 900px; margin: 0 auto;">
+        <p style="margin: 0;">
+            Reverse Proxy Manager v<span id="appVersion">1.0.0</span>
+            <span style="margin: 0 10px;">•</span>
+            <a href="https://github.com/codeitnos/reverse_proxy" target="_blank" style="color: #667eea; text-decoration: none;">GitHub</a>
+            <span style="margin: 0 10px;">•</span>
+            <span>© 2025</span>
+        </p>
+    </div>
+</footer>
+
+<script>
+    // Загрузка версии приложения
+    async function loadAppVersion() {
+        try {
+            const response = await fetch('/api/version');
+            const data = await response.json();
+            if (data.version) {
+                document.getElementById('appVersion').textContent = data.version;
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки версии:', error);
+        }
+    }
+
+    // Вызываем при загрузке страницы
+    loadAppVersion();
+</script>
+
 </body>
 </html>
