@@ -143,6 +143,8 @@
             font-size: 13px;
             color: #6c757d;
             font-style: italic;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .item-status {
             display: flex;
@@ -1662,6 +1664,31 @@
         }
     });
 
+    // Функция для экранирования HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Функция для экранирования строк для JavaScript (для использования в атрибутах onclick)
+    function escapeForJs(text) {
+        if (!text) return '';
+        return text
+            .replace(/\\/g, '\\\\')    // Обратные слеши
+            .replace(/'/g, "\\'")       // Одинарные кавычки
+            .replace(/"/g, '\\"')       // Двойные кавычки
+            .replace(/\n/g, '\\n')      // Переносы строк
+            .replace(/\r/g, '\\r')      // Возврат каретки
+            .replace(/\t/g, '\\t');     // Табуляции
+    }
+
+    // Функция для преобразования переносов строк в <br> для HTML отображения
+    function nl2br(text) {
+        if (!text) return '';
+        return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
     async function loadItems() {
         const response = await fetch('/api/items');
         const items = await response.json();
@@ -1718,7 +1745,7 @@
             }
 
             const lastSync = item.cf_last_sync ? new Date(item.cf_last_sync).toLocaleString('ru-RU') : 'Никогда';
-            const notesHtml = item.notes ? `<div class="item-notes">📝 ${escapeHtml(item.notes)}</div>` : '';
+            const notesHtml = item.notes ? `<div class="item-notes">${nl2br(item.notes)}</div>` : '';
 
             return `
         <div class="item-card ${item.active ? '' : 'inactive'}">
@@ -1748,7 +1775,7 @@
           <div class="item-actions">
             <button class="item-menu-btn" onclick="toggleItemMenu(${item.id}, event)">⋮</button>
             <div class="item-dropdown-menu" id="itemMenu${item.id}">
-              <div class="item-dropdown-item" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active}, '${escapeHtml(item.notes || '')}'); closeItemMenu(${item.id});">
+              <div class="item-dropdown-item" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active}, '${escapeForJs(item.notes || '')}'); closeItemMenu(${item.id});">
                 ✏️ Редактировать
               </div>
               <div class="item-dropdown-item danger" onclick="deleteItem(${item.id}); closeItemMenu(${item.id});">
@@ -1905,12 +1932,6 @@
             hideLoading();
             alert('❌ Ошибка при подключении к серверу: ' + error.message);
         }
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     async function toggleSsl(id, ssl) {
