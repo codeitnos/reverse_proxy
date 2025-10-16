@@ -1751,7 +1751,7 @@
         <div class="item-card ${item.active ? '' : 'inactive'}">
           <div class="item-content">
             <p><strong>Источник:</strong> <a href="http://${escapeHtml(item.domain)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.domain)}</a> <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
-            ${notesHtml}
+
             ${dnsInfoHtml}
             <p><strong>Направление:</strong> <a href="${escapeHtml(item.dest)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.dest)}</a></p>
             <p style="display: none;"><strong>Пункт 3:</strong>  ${escapeHtml(item.item3)}</p>
@@ -1770,7 +1770,9 @@
                   ${item.active ? 'Активна' : 'Неактивна'}
                 </span>
               </div>
+
             </div>
+              ${notesHtml}
           </div>
           <div class="item-actions">
             <button class="item-menu-btn" onclick="toggleItemMenu(${item.id}, event)">⋮</button>
