@@ -505,7 +505,7 @@ app.get('/api/items', requireAuth, (req, res) => {
 });
 
 app.post('/api/items', requireAuth, async (req, res) => {
-    const { domain, dest, item3, ssl, active } = req.body;
+    const { domain, dest, item3, ssl, active, notes } = req.body;
 
     // Проверяем наличие SSL сертификата, если SSL включен
     if (ssl) {
@@ -524,7 +524,8 @@ app.post('/api/items', requireAuth, async (req, res) => {
         dest,
         item3,
         ssl: ssl !== undefined ? ssl : false,
-        active: active !== undefined ? active : true
+        active: active !== undefined ? active : true,
+        notes: notes || ''
     };
     items.push(newItem);
     saveItems();
@@ -564,7 +565,7 @@ app.post('/api/items', requireAuth, async (req, res) => {
 
 app.put('/api/items/:id', requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
-    const { domain, dest, item3, ssl, active } = req.body;
+    const { domain, dest, item3, ssl, active, notes } = req.body;
     const itemIndex = items.findIndex(item => item.id === id);
 
     if (itemIndex !== -1) {
@@ -589,7 +590,8 @@ app.put('/api/items/:id', requireAuth, async (req, res) => {
             dest,
             item3,
             ssl: ssl !== undefined ? ssl : items[itemIndex].ssl,
-            active: active !== undefined ? active : items[itemIndex].active
+            active: active !== undefined ? active : items[itemIndex].active,
+            notes: notes !== undefined ? notes : (items[itemIndex].notes || '')
         };
         saveItems();
 

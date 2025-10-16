@@ -127,12 +127,22 @@
             flex: 1;
         }
         .item-content p {
-            margin: 0px 0;
+            margin: 5px 0;
             color: #495057;
             line-height: 1.5;
         }
         .item-content strong {
             color: #667eea;
+        }
+        .item-notes {
+            margin: 8px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-left: 3px solid #ced4da;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #6c757d;
+            font-style: italic;
         }
         .item-status {
             display: flex;
@@ -318,17 +328,25 @@
         input[type="text"],
         input[type="email"],
         input[type="password"],
-        input[type="file"] {
+        input[type="file"],
+        textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ced4da;
             border-radius: 5px;
             font-size: 14px;
+            font-family: inherit;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+            max-height: 200px;
         }
         input[type="text"]:focus,
         input[type="email"]:focus,
         input[type="password"]:focus,
-        input[type="file"]:focus {
+        input[type="file"]:focus,
+        textarea:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -772,6 +790,10 @@
                 display: block;
                 margin-bottom: 3px;
             }
+            .item-notes {
+                margin: 6px 0;
+                font-size: 12px;
+            }
             .dns-info {
                 flex-direction: column;
                 align-items: flex-start;
@@ -874,6 +896,10 @@
                 <label>Направление (начинается с http или https):</label>
                 <input type="text"  name="dest" required placeholder="http://192.168.1.22:8080">
             </div>
+            <div class="form-group">
+                <label>Примечание:</label>
+                <textarea name="notes" placeholder="Опционально: заметка о назначении этой записи"></textarea>
+            </div>
             <div class="form-group" style="display: none;">
                 <label>Пункт 3:</label>
                 <input type="text" name="item3" >
@@ -911,6 +937,10 @@
             <div class="form-group">
                 <label>Направление (начинается с http или https):</label>
                 <input type="text" id="editDest" required placeholder="http://192.168.1.22:8080">
+            </div>
+            <div class="form-group">
+                <label>Примечание:</label>
+                <textarea id="editNotes" placeholder="Опционально: заметка о назначении этой записи"></textarea>
             </div>
             <div class="form-group"  style="display: none;">
                 <label>Пункт 3:</label>
@@ -1517,6 +1547,7 @@
             domain: formData.get('domain'),
             dest: formData.get('dest'),
             item3: formData.get('item3'),
+            notes: formData.get('notes'),
             ssl: formData.get('ssl') === 'on',
             active: formData.get('active') === 'on'
         };
@@ -1603,11 +1634,13 @@
             }
 
             const lastSync = item.cf_last_sync ? new Date(item.cf_last_sync).toLocaleString('ru-RU') : 'Никогда';
+            const notesHtml = item.notes ? `<div class="item-notes">📝 ${escapeHtml(item.notes)}</div>` : '';
 
             return `
         <div class="item-card ${item.active ? '' : 'inactive'}">
           <div class="item-content">
             <p><strong>Источник:</strong> <a href="http://${escapeHtml(item.domain)}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: none; border-bottom: 1px dashed #667eea;">${escapeHtml(item.domain)}</a> <span style="font-size: 11px; color: #6c757d;">(обновлено: ${lastSync})</span></p>
+            ${notesHtml}
             ${dnsInfoHtml}
             <p><strong>Направление:</strong> ${escapeHtml(item.dest)}</p>
             <p style="display: none;"><strong>Пункт 3:</strong> ${escapeHtml(item.item3)}</p>
@@ -1631,7 +1664,7 @@
           <div class="item-actions">
             <button class="item-menu-btn" onclick="toggleItemMenu(${item.id}, event)">⋮</button>
             <div class="item-dropdown-menu" id="itemMenu${item.id}">
-              <div class="item-dropdown-item" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active}); closeItemMenu(${item.id});">
+              <div class="item-dropdown-item" onclick="openEditModal(${item.id}, '${escapeHtml(item.domain)}', '${escapeHtml(item.dest)}', '${escapeHtml(item.item3)}', ${item.ssl}, ${item.active}, '${escapeHtml(item.notes || '')}'); closeItemMenu(${item.id});">
                 ✏️ Редактировать
               </div>
               <div class="item-dropdown-item danger" onclick="deleteItem(${item.id}); closeItemMenu(${item.id});">
@@ -1846,11 +1879,12 @@
         }
     }
 
-    function openEditModal(id, domain, dest, item3, ssl, active) {
+    function openEditModal(id, domain, dest, item3, ssl, active, notes) {
         document.getElementById('editId').value = id;
         document.getElementById('editDomain').value = domain;
         document.getElementById('editDest').value = dest;
         document.getElementById('editItem3').value = item3;
+        document.getElementById('editNotes').value = notes;
         document.getElementById('editSsl').checked = ssl;
         document.getElementById('editActive').checked = active;
         document.getElementById('editModal').style.display = 'block';
@@ -1867,6 +1901,7 @@
             domain: document.getElementById('editDomain').value,
             dest: document.getElementById('editDest').value,
             item3: document.getElementById('editItem3').value,
+            notes: document.getElementById('editNotes').value,
             ssl: document.getElementById('editSsl').checked,
             active: document.getElementById('editActive').checked
         };
