@@ -1,6 +1,6 @@
 {
   "name": "reverse-proxy-manager",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Reverse Proxy Management System with SSL and DNS",
   "main": "server.js",
   "scripts": {
