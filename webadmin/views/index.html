@@ -5,43 +5,161 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Управление записями</title>
     <style>
+        :root {
+            /* Light theme colors */
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e0;
+            --accent-primary: #667eea;
+            --accent-hover: #5568d3;
+            --success: #48bb78;
+            --success-bg: #c6f6d5;
+            --warning: #ed8936;
+            --warning-bg: #feebc8;
+            --danger: #f56565;
+            --danger-bg: #fed7d7;
+            --info: #4299e1;
+            --info-bg: #bee3f8;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+            --card-shadow-hover: 0 10px 20px rgba(0, 0, 0, 0.12);
+            --modal-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            --overlay-bg: rgba(0, 0, 0, 0.4);
+            --input-bg: #ffffff;
+            --input-border: #cbd5e0;
+            --status-inactive-bg: #f7fafc;
+        }
+
+        [data-theme="dark"] {
+            /* Dark theme colors */
+            --bg-primary: #1a202c;
+            --bg-secondary: #2d3748;
+            --bg-gradient-start: #2d3748;
+            --bg-gradient-end: #1a202c;
+            --text-primary: #f7fafc;
+            --text-secondary: #e2e8f0;
+            --text-muted: #a0aec0;
+            --border-color: #4a5568;
+            --border-hover: #718096;
+            --accent-primary: #7c3aed;
+            --accent-hover: #6d28d9;
+            --success: #38a169;
+            --success-bg: #22543d;
+            --warning: #dd6b20;
+            --warning-bg: #7c2d12;
+            --danger: #e53e3e;
+            --danger-bg: #742a2a;
+            --info: #3182ce;
+            --info-bg: #2c5282;
+            --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: 0 10px 20px rgba(0, 0, 0, 0.4);
+            --modal-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            --overlay-bg: rgba(0, 0, 0, 0.7);
+            --input-bg: #2d3748;
+            --input-border: #4a5568;
+            --status-inactive-bg: #2d3748;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 16px;
+            color: var(--text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding: 24px;
+            }
         }
         .container {
-            max-width: 900px;
+            max-width: 1100px;
             margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
         }
+
+        @media (min-width: 768px) {
+            .container {
+                padding: 40px;
+            }
+        }
+
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #667eea;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid var(--border-color);
+            gap: 16px;
         }
+
         .header-menu-wrapper {
             position: relative;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
+
         h1 {
-            color: #667eea;
-            font-size: 28px;
+            color: var(--accent-primary);
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 22px;
+            }
+        }
+
         .header-buttons {
             display: flex;
             gap: 10px;
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            padding: 0;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            transform: scale(1.05);
+        }
+
+        .theme-toggle:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .btn {
             padding: 10px 20px;
@@ -105,8 +223,8 @@
             gap: 15px;
         }
         .item-card {
-            background: #fff;
-            border: 2px solid #e9ecef;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
             border-radius: 10px;
             padding: 10px;
             transition: all 0.3s;
@@ -116,12 +234,12 @@
             gap: 20px;
         }
         .item-card:hover {
-            border-color: #667eea;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+            border-color: var(--accent-primary);
+            box-shadow: var(--card-shadow-hover);
         }
         .item-card.inactive {
             opacity: 0.6;
-            background: #f8f9fa;
+            background: var(--status-inactive-bg);
         }
         .item-content {
             flex: 1;
@@ -137,11 +255,11 @@
         .item-notes {
             margin: 8px 0;
             padding: 8px;
-            background: #f8f9fa;
-            border-left: 3px solid #ced4da;
+            background: var(--input-bg);
+            border-left: 3px solid var(--border-color);
             border-radius: 3px;
             font-size: 13px;
-            color: #6c757d;
+            color: var(--text-muted);
             font-style: italic;
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -196,7 +314,7 @@
             position: absolute;
             top: 40px;
             right: 0;
-            background: white;
+            background: var(--bg-secondary);
             border-radius: 8px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.2);
             z-index: 100;
@@ -219,23 +337,23 @@
         }
         .item-dropdown-item {
             padding: 12px 16px;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background 0.2s;
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #495057;
+            color: var(--text-secondary);
             font-size: 14px;
         }
         .item-dropdown-item:last-child {
             border-bottom: none;
         }
         .item-dropdown-item:hover {
-            background: #f8f9fa;
+            background: var(--input-bg);
         }
         .item-dropdown-item.danger:hover {
-            background: #f8d7da;
+            background: var(--danger-bg);
             color: #dc3545;
         }
         .icon-btn {
@@ -269,7 +387,7 @@
             background-color: rgba(0,0,0,0.5);
         }
         .modal-content {
-            background-color: white;
+            background-color: var(--bg-secondary);
             margin: 5% auto;
             padding: 30px;
             border-radius: 15px;
@@ -312,11 +430,11 @@
         .close {
             font-size: 28px;
             font-weight: bold;
-            color: #aaa;
+            color: var(--text-muted);
             cursor: pointer;
         }
         .close:hover {
-            color: #000;
+            color: var(--text-primary);
         }
         .form-group {
             margin-bottom: 15px;
@@ -324,7 +442,7 @@
         label {
             display: block;
             margin-bottom: 5px;
-            color: #495057;
+            color: var(--text-secondary);
             font-weight: 500;
         }
         input[type="text"],
@@ -334,10 +452,12 @@
         textarea {
             width: 100%;
             padding: 10px;
-            border: 1px solid #ced4da;
+            border: 1px solid var(--border-color);
             border-radius: 5px;
             font-size: 14px;
             font-family: inherit;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         textarea {
             resize: vertical;
@@ -688,7 +808,7 @@
             position: absolute;
             top: calc(100% + 5px);
             right: 0;
-            background: white;
+            background: var(--bg-secondary);
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             z-index: 1000;
@@ -711,23 +831,23 @@
         }
         .dropdown-menu-item {
             padding: 15px 20px;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background 0.2s;
             display: flex;
             align-items: center;
             gap: 10px;
-            color: #495057;
+            color: var(--text-secondary);
             text-decoration: none;
         }
         .dropdown-menu-item:last-child {
             border-bottom: none;
         }
         .dropdown-menu-item:hover {
-            background: #f8f9fa;
+            background: var(--input-bg);
         }
         .dropdown-menu-item.danger:hover {
-            background: #f8d7da;
+            background: var(--danger-bg);
             color: #dc3545;
         }
         .menu-overlay {
@@ -869,6 +989,9 @@
     <div class="header">
         <h1>Reverse Proxy Manager</h1>
         <div class="header-menu-wrapper">
+            <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему" aria-label="Переключить тему">
+                <span id="themeIcon">🌙</span>
+            </button>
             <button class="hamburger-btn" onclick="toggleMenu()">☰</button>
 
             <!-- Выпадающее меню -->
@@ -2350,6 +2473,65 @@
             alert('❌ Ошибка при подключении к серверу: ' + error.message);
         }
     }
+
+    // ============================================================================
+    // ФУНКЦИИ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ТЕМЫ
+    // ============================================================================
+
+    // Функция переключения темы
+    function toggleTheme() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        // Устанавливаем новую тему
+        html.setAttribute('data-theme', newTheme);
+
+        // Сохраняем выбор пользователя в localStorage
+        localStorage.setItem('theme', newTheme);
+
+        // Обновляем иконку
+        updateThemeIcon(newTheme);
+    }
+
+    // Функция обновления иконки темы
+    function updateThemeIcon(theme) {
+        const themeIcon = document.getElementById('themeIcon');
+        if (themeIcon) {
+            themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+    }
+
+    // Инициализация темы при загрузке страницы
+    function initTheme() {
+        // Проверяем сохраненную тему в localStorage
+        const savedTheme = localStorage.getItem('theme');
+
+        // Если есть сохраненная тема, используем её
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        } else {
+            // Иначе проверяем системные настройки пользователя
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const defaultTheme = prefersDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', defaultTheme);
+            updateThemeIcon(defaultTheme);
+        }
+    }
+
+    // Инициализируем тему сразу при загрузке страницы
+    initTheme();
+
+    // Слушаем изменения системной темы
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // Только если пользователь не установил свою тему вручную
+        if (!localStorage.getItem('theme')) {
+            const newTheme = e.matches ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+    });
 </script>
 
 
