@@ -2336,6 +2336,41 @@ app.post('/api/clear-cf-token', requireAuth, async (req, res) => {
     }
 });
 
+// Получение nginx конфигурации для записи
+app.get('/api/items/:id/nginx-config', requireAuth, (req, res) => {
+    const id = parseInt(req.params.id);
+    const item = items.find(item => item.id === id);
+
+    if (!item) {
+        return res.status(404).json({ error: 'Запись не найдена' });
+    }
+
+    try {
+        const configPath = path.join(NGINX_CONFIG_DIR, `${item.domain}.conf`);
+
+        if (fs.existsSync(configPath)) {
+            const config = fs.readFileSync(configPath, 'utf8');
+            res.json({
+                success: true,
+                domain: item.domain,
+                config: config,
+                path: configPath
+            });
+        } else {
+            res.status(404).json({
+                error: 'Конфигурационный файл не найден',
+                details: `Файл ${item.domain}.conf не существует. Возможно, запись не активна.`
+            });
+        }
+    } catch (error) {
+        console.error('❌ Ошибка при чтении nginx конфига:', error);
+        res.status(500).json({
+            error: 'Ошибка при чтении конфигурации',
+            details: error.message
+        });
+    }
+});
+
 // Запуск сервера
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
