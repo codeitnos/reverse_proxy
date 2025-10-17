@@ -1823,12 +1823,33 @@
         }
     });
 
+    // Функция валидации URL
+    function validateDestinationUrl(url) {
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+            return {
+                valid: false,
+                message: '⚠️ Ошибка валидации!\n\nПоле "Направление" должно начинаться с http:// или https://\n\nПримеры правильного формата:\n✓ http://192.168.1.22:8080\n✓ https://example.com:3000'
+            };
+        }
+        return { valid: true };
+    }
+
     document.getElementById('addForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
+        const destValue = formData.get('dest');
+
+        // Валидация URL
+        const validation = validateDestinationUrl(destValue);
+        if (!validation.valid) {
+            alert(validation.message);
+            return;
+        }
+
         const data = {
             domain: formData.get('domain'),
-            dest: formData.get('dest'),
+            dest: destValue,
             item3: formData.get('item3'),
             notes: formData.get('notes'),
             ssl: formData.get('ssl') === 'on',
@@ -2204,9 +2225,18 @@
     document.getElementById('editForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('editId').value;
+        const destValue = document.getElementById('editDest').value;
+
+        // Валидация URL
+        const validation = validateDestinationUrl(destValue);
+        if (!validation.valid) {
+            alert(validation.message);
+            return;
+        }
+
         const data = {
             domain: document.getElementById('editDomain').value,
-            dest: document.getElementById('editDest').value,
+            dest: destValue,
             item3: document.getElementById('editItem3').value,
             notes: document.getElementById('editNotes').value,
             ssl: document.getElementById('editSsl').checked,
