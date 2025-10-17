@@ -15,9 +15,41 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             padding: 20px;
+        }
+        .page-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        footer {
+            width: 100%;
+            text-align: center;
+            padding: 20px 0;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+        }
+        footer p {
+            margin: 0;
+        }
+        footer a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        footer a:hover {
+            color: white;
+            text-decoration: underline;
+        }
+        footer span.separator {
+            margin: 0 10px;
+            color: rgba(255, 255, 255, 0.6);
         }
         .login-container {
             background: white;
@@ -87,28 +119,56 @@
     </style>
 </head>
 <body>
-<div class="login-container">
-    <h1>🔐 Вход в систему</h1>
-    <form id="loginForm">
-        <div class="form-group">
-            <label>Имя пользователя:</label>
-            <input type="text" name="username" required>
+<div class="page-wrapper">
+    <div class="login-container">
+        <h1>🔐 Вход в систему</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label>Имя пользователя:</label>
+                <input type="text" name="username" required>
+            </div>
+            <div class="form-group">
+                <label>Пароль:</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit">Войти</button>
+            <div class="error" id="error"></div>
+        </form>
+        <div class="info">
+            <strong>По умолчанию:</strong><br>
+            Логин: admin<br>
+            Пароль: password123
         </div>
-        <div class="form-group">
-            <label>Пароль:</label>
-            <input type="password" name="password" required>
-        </div>
-        <button type="submit">Войти</button>
-        <div class="error" id="error"></div>
-    </form>
-    <div class="info">
-        <strong>По умолчанию:</strong><br>
-        Логин: admin<br>
-        Пароль: password123
     </div>
 </div>
 
+<footer id="appFooter">
+    <p>
+        Reverse Proxy Manager v<span id="appVersion">1.0.0</span>
+        <span class="separator">•</span>
+        <a href="https://github.com/codeitnos/reverse_proxy" target="_blank">GitHub</a>
+        <span class="separator">•</span>
+        <span>© 2025</span>
+    </p>
+</footer>
+
 <script>
+    // Загрузка версии приложения
+    async function loadAppVersion() {
+        try {
+            const response = await fetch('/api/version');
+            const data = await response.json();
+            if (data.version) {
+                document.getElementById('appVersion').textContent = data.version;
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки версии:', error);
+        }
+    }
+
+    // Вызываем при загрузке страницы
+    loadAppVersion();
+
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);

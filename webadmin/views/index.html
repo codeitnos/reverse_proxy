@@ -744,6 +744,31 @@
             display: block;
         }
 
+        /* Стили для футера */
+        footer {
+            width: 100%;
+            text-align: center;
+            padding: 20px 0;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+        }
+        footer p {
+            margin: 0;
+        }
+        footer a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        footer a:hover {
+            color: white;
+            text-decoration: underline;
+        }
+        footer span.separator {
+            margin: 0 10px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
         /* Адаптивные стили для мобильных устройств */
         @media (max-width: 768px) {
             .container {
@@ -887,6 +912,34 @@
     </div>
     <div id="itemsList" class="items-list"></div>
 </div>
+
+<footer id="appFooter">
+    <p>
+        Reverse Proxy Manager v<span id="appVersion">1.0.0</span>
+        <span class="separator">•</span>
+        <a href="https://github.com/codeitnos/reverse_proxy" target="_blank">GitHub</a>
+        <span class="separator">•</span>
+        <span>© 2025</span>
+    </p>
+</footer>
+
+<script>
+    // Загрузка версии приложения
+    async function loadAppVersion() {
+        try {
+            const response = await fetch('/api/version');
+            const data = await response.json();
+            if (data.version) {
+                document.getElementById('appVersion').textContent = data.version;
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки версии:', error);
+        }
+    }
+
+    // Вызываем при загрузке страницы
+    loadAppVersion();
+</script>
 
 <!-- Модальное окно для добавления -->
 <div id="addModal" class="modal">
@@ -2300,36 +2353,6 @@
 </script>
 
 
-<!-- Футер с версией -->
-<footer id="appFooter" style="text-align: center; padding: 20px 0; color: #6c757d; font-size: 12px; margin-top: 30px; border-top: 1px solid #e9ecef;">
-    <div class="container" style="max-width: 900px; margin: 0 auto;">
-        <p style="margin: 0;">
-            Reverse Proxy Manager v<span id="appVersion">1.0.0</span>
-            <span style="margin: 0 10px;">•</span>
-            <a href="https://github.com/codeitnos/reverse_proxy" target="_blank" style="color: #667eea; text-decoration: none;">GitHub</a>
-            <span style="margin: 0 10px;">•</span>
-            <span>© 2025</span>
-        </p>
-    </div>
-</footer>
-
-<script>
-    // Загрузка версии приложения
-    async function loadAppVersion() {
-        try {
-            const response = await fetch('/api/version');
-            const data = await response.json();
-            if (data.version) {
-                document.getElementById('appVersion').textContent = data.version;
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки версии:', error);
-        }
-    }
-
-    // Вызываем при загрузке страницы
-    loadAppVersion();
-</script>
 
 </body>
 </html>
