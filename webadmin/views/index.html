@@ -2425,9 +2425,11 @@
                         ? `Успешно (обн: ${record.updated || 0}, ош: ${record.errors || 0})`
                         : 'Ошибка';
 
+                    const manualBadge = record.manual ? ' <span style="background: #0088cc; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 5px;">РУЧНОЙ</span>' : '';
+
                     return `
                         <div class="cert-item">
-                            <div class="cert-domain">${dateStr}</div>
+                            <div class="cert-domain">${dateStr}${manualBadge}</div>
                             <div class="cert-status">
                                 <span class="cert-badge ${statusClass}">${statusText}</span>
                                 <span class="cert-expiry">${record.duration}ms</span>

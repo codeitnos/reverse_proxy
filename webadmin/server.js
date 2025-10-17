@@ -2260,7 +2260,28 @@ app.post('/api/manual-sync', requireAuth, async (req, res) => {
     }
 
     try {
+        const startTime = new Date();
+        console.log(`\n🔄 [${startTime.toISOString()}] Начало ручной синхронизации DNS...`);
+
         const result = await autoSyncAllDns();
+
+        const endTime = new Date();
+        const duration = endTime - startTime;
+
+        // Добавляем запись в историю синхронизаций
+        const syncRecord = {
+            timestamp: startTime.toISOString(),
+            duration: duration,
+            success: true,
+            updated: result.updated || 0,
+            errors: result.errors || 0,
+            details: result.details || [],
+            manual: true // Отмечаем, что это ручной запуск
+        };
+
+        syncScheduler.addToHistory(syncRecord);
+
+        console.log(`✅ Ручная синхронизация завершена за ${duration}ms`);
 
         res.json({
             success: true,
@@ -2269,6 +2290,17 @@ app.post('/api/manual-sync', requireAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Ошибка при ручной синхронизации:', error);
+
+        // Добавляем запись об ошибке в историю
+        const syncRecord = {
+            timestamp: new Date().toISOString(),
+            duration: 0,
+            success: false,
+            error: error.message,
+            manual: true
+        };
+        syncScheduler.addToHistory(syncRecord);
+
         res.status(500).json({ error: 'Ошибка при ручной синхронизации', details: error.message });
     }
 });
