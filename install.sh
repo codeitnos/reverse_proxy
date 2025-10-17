@@ -87,7 +87,13 @@ echo "Установка и настройка..."
 pct exec $CTID -- bash -c "
     export DEBIAN_FRONTEND=noninteractive
     apt update && apt upgrade -y
-    apt install -y curl wget git vim htop net-tools sudo unzip openssh-server
+    apt install -y curl wget git vim htop net-tools sudo unzip openssh-server locales
+
+    # Настройка локалей
+    echo '=== Настройка локалей ==='
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen
+    locale-gen
+    update-locale LANG=en_US.UTF-8
 
     # Настройка SSH
     echo '=== Настройка SSH ==='
