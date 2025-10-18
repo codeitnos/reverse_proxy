@@ -5,6 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Вход в систему</title>
     <style>
+        :root {
+            --bg-gradient-start: #667eea;
+            --bg-gradient-end: #764ba2;
+            --bg-secondary: #ffffff;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --accent-primary: #667eea;
+            --accent-hover: #5568d3;
+            --input-bg: #ffffff;
+            --input-border: #ced4da;
+            --info-bg: #e7f3ff;
+            --info-border: #2196F3;
+            --footer-text: rgba(255, 255, 255, 0.9);
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --button-text: #ffffff;
+            --focus-shadow: rgba(102, 126, 234, 0.15);
+        }
+
+        [data-theme="dark"] {
+            --bg-gradient-start: #2d3748;
+            --bg-gradient-end: #1a202c;
+            --bg-secondary: #2d3748;
+            --text-primary: #f7fafc;
+            --text-secondary: #e2e8f0;
+            --text-muted: #a0aec0;
+            --accent-primary: #7c3aed;
+            --accent-hover: #6d28d9;
+            --input-bg: #1f2937;
+            --input-border: #4a5568;
+            --info-bg: #2c5282;
+            --info-border: #63b3ed;
+            --footer-text: rgba(255, 255, 255, 0.8);
+            --shadow-color: rgba(0, 0, 0, 0.5);
+            --button-text: #f7fafc;
+            --focus-shadow: rgba(124, 58, 237, 0.25);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,7 +50,8 @@
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -32,14 +71,14 @@
             width: 100%;
             text-align: center;
             padding: 20px 0;
-            color: rgba(255, 255, 255, 0.9);
+            color: var(--footer-text);
             font-size: 12px;
         }
         footer p {
             margin: 0;
         }
         footer a {
-            color: rgba(255, 255, 255, 0.9);
+            color: var(--footer-text);
             text-decoration: none;
             transition: color 0.3s;
         }
@@ -49,18 +88,19 @@
         }
         footer span.separator {
             margin: 0 10px;
-            color: rgba(255, 255, 255, 0.6);
+            color: var(--footer-text);
+            opacity: 0.6;
         }
         .login-container {
-            background: white;
+            background: var(--bg-secondary);
             padding: 40px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px var(--shadow-color);
             width: 100%;
             max-width: 400px;
         }
         h1 {
-            color: #667eea;
+            color: var(--accent-primary);
             text-align: center;
             margin-bottom: 30px;
             font-size: 28px;
@@ -71,26 +111,28 @@
         label {
             display: block;
             margin-bottom: 8px;
-            color: #495057;
+            color: var(--text-secondary);
             font-weight: 500;
         }
         input {
             width: 100%;
             padding: 12px;
-            border: 1px solid #ced4da;
+            border: 1px solid var(--input-border);
             border-radius: 5px;
             font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px var(--focus-shadow);
         }
         button {
             width: 100%;
             padding: 12px;
-            background: #667eea;
-            color: white;
+            background: var(--accent-primary);
+            color: var(--button-text);
             border: none;
             border-radius: 5px;
             font-size: 16px;
@@ -99,7 +141,7 @@
             transition: background 0.3s;
         }
         button:hover {
-            background: #5568d3;
+            background: var(--accent-hover);
         }
         .error {
             color: #dc3545;
@@ -108,15 +150,27 @@
             display: none;
         }
         .info {
-            background: #e7f3ff;
-            border-left: 4px solid #2196F3;
+            background: var(--info-bg);
+            border-left: 4px solid var(--info-border);
             padding: 12px;
             margin-top: 20px;
             border-radius: 5px;
             font-size: 13px;
-            color: #495057;
+            color: var(--text-secondary);
         }
     </style>
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
 </head>
 <body>
 <div class="page-wrapper">
